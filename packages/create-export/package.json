@@ -1,6 +1,6 @@
 {
   "name": "create-export",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Cloudflare Workers ESM Export Framework",
   "keywords": [
     "cloudflare",
