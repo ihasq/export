@@ -5,6 +5,7 @@ const rotateX = ref(0);
 const rotateY = ref(0);
 const cursorVisible = ref(true);
 const activeTab = ref("client");
+const bodyRef = ref(null);
 
 // ── Code definitions ────────────────────────────────────────
 
@@ -94,7 +95,10 @@ function startTyping() {
 
     const c = chars[typedChars.value];
     typedChars.value++;
-    if (c.ch === "\n") lineCount.value++;
+    if (c.ch === "\n") {
+      lineCount.value++;
+      if (bodyRef.value) bodyRef.value.scrollTop = bodyRef.value.scrollHeight;
+    }
     const delay = c.ch === "\n" ? 300 : c.cls === "cmt" ? 25 : 45;
     typeTimeout = setTimeout(typeNext, delay);
   }
@@ -159,7 +163,7 @@ onMounted(() => {
           >server.ts</button>
         </div>
       </div>
-      <div class="terminal-body">
+      <div class="terminal-body" ref="bodyRef">
         <div class="line-numbers">
           <span v-for="n in lineCount" :key="n">{{ n }}</span>
         </div>
@@ -248,6 +252,20 @@ onMounted(() => {
   display: flex;
   padding: 16px 0;
   min-height: 280px;
+  max-height: 280px;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+.terminal-body::-webkit-scrollbar {
+  width: 4px;
+}
+.terminal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.terminal-body::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 2px;
 }
 
 .line-numbers {
