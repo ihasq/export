@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 
 import { parseSync } from "oxc-parser";
+import { minifySync } from "oxc-minify";
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
 const cwd = process.cwd();
 
@@ -217,7 +220,25 @@ lines.push("}>;");
 
 const typeDefinitions = lines.join("\n");
 
-// Write as a JS module that exports the string
+// --- Minify core module ---
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const { CORE_CODE } = await import(path.join(__dirname, "..", "client.js"));
+
+// CORE_CODE uses import.meta.url for WS URL — no placeholders needed.
+const minified = minifySync("_core.js", CORE_CODE);
+if (minified.errors?.length) {
+  console.error("Minification errors:", minified.errors);
+}
+
+// Generate a unique ID per build for cache-busting the core module path
+const coreId = crypto.randomUUID();
+
+// Write as a JS module that exports type definitions, minified core, and core ID
 const outPath = path.join(cwd, ".export-types.js");
-fs.writeFileSync(outPath, `export default ${JSON.stringify(typeDefinitions)};\n`);
-console.log("Generated type definitions →", outPath);
+fs.writeFileSync(outPath, [
+  `export default ${JSON.stringify(typeDefinitions)};`,
+  `export const minifiedCore = ${JSON.stringify(minified.code)};`,
+  `export const coreId = ${JSON.stringify(coreId)};`,
+].join("\n") + "\n");
+console.log("Generated type definitions + minified core →", outPath);

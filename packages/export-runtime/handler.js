@@ -1,5 +1,5 @@
 import { stringify, parse } from "devalue";
-import { CLIENT_CODE, DEVALUE_PARSE, DEVALUE_STRINGIFY } from "./client.js";
+import { CORE_CODE } from "./client.js";
 
 const getByPath = (obj, path) => {
   let current = obj;
@@ -19,70 +19,56 @@ const isReadableStream = (value) =>
 const isClass = (fn) =>
   typeof fn === "function" && /^class\s/.test(Function.prototype.toString.call(fn));
 
-// Generate TypeScript type definitions from exports
-const generateTypeDefinitions = (exports, exportKeys) => {
+// Runtime fallback: generate TypeScript type definitions from exports
+const generateTypeDefinitions = (exports, keys) => {
   const lines = [
     "// Auto-generated type definitions",
     "// All functions are async over the network",
     "",
   ];
 
-  const generateType = (value, name, indent = "") => {
+  for (const name of keys) {
+    const value = exports[name];
     if (isClass(value)) {
-      // Extract class method names
       const proto = value.prototype;
       const methodNames = Object.getOwnPropertyNames(proto).filter(
         (n) => n !== "constructor" && typeof proto[n] === "function"
       );
-
-      lines.push(`${indent}export declare class ${name} {`);
-      lines.push(`${indent}  constructor(...args: any[]);`);
+      lines.push(`export declare class ${name} {`);
+      lines.push(`  constructor(...args: any[]);`);
       for (const method of methodNames) {
-        lines.push(`${indent}  ${method}(...args: any[]): Promise<any>;`);
+        lines.push(`  ${method}(...args: any[]): Promise<any>;`);
       }
-      lines.push(`${indent}  [Symbol.dispose](): Promise<void>;`);
-      lines.push(`${indent}  "[release]"(): Promise<void>;`);
-      lines.push(`${indent}}`);
+      lines.push(`  [Symbol.dispose](): Promise<void>;`);
+      lines.push(`  "[release]"(): Promise<void>;`);
+      lines.push(`}`);
     } else if (typeof value === "function") {
-      // Check if it's an async generator
       const fnStr = Function.prototype.toString.call(value);
       if (fnStr.startsWith("async function*") || fnStr.includes("async *")) {
-        lines.push(
-          `${indent}export declare function ${name}(...args: any[]): Promise<AsyncIterable<any>>;`
-        );
+        lines.push(`export declare function ${name}(...args: any[]): Promise<AsyncIterable<any>>;`);
       } else if (fnStr.includes("ReadableStream")) {
-        lines.push(
-          `${indent}export declare function ${name}(...args: any[]): Promise<ReadableStream<any>>;`
-        );
+        lines.push(`export declare function ${name}(...args: any[]): Promise<ReadableStream<any>>;`);
       } else {
-        lines.push(
-          `${indent}export declare function ${name}(...args: any[]): Promise<any>;`
-        );
+        lines.push(`export declare function ${name}(...args: any[]): Promise<any>;`);
       }
     } else if (typeof value === "object" && value !== null) {
-      // Nested object with methods
       const keys = Object.keys(value);
-      lines.push(`${indent}export declare const ${name}: {`);
+      lines.push(`export declare const ${name}: {`);
       for (const key of keys) {
         const v = value[key];
         if (typeof v === "function") {
-          lines.push(`${indent}  ${key}(...args: any[]): Promise<any>;`);
+          lines.push(`  ${key}(...args: any[]): Promise<any>;`);
         } else {
-          lines.push(`${indent}  ${key}: any;`);
+          lines.push(`  ${key}: any;`);
         }
       }
-      lines.push(`${indent}};`);
+      lines.push(`};`);
     } else {
-      lines.push(`${indent}export declare const ${name}: any;`);
+      lines.push(`export declare const ${name}: any;`);
     }
-  };
-
-  for (const key of exportKeys) {
-    generateType(exports[key], key);
     lines.push("");
   }
 
-  // Add createUploadStream helper type
   lines.push("export declare function createUploadStream(): Promise<{");
   lines.push("  stream: WritableStream<any>;");
   lines.push("  writableId: number;");
@@ -91,7 +77,20 @@ const generateTypeDefinitions = (exports, exportKeys) => {
   return lines.join("\n");
 };
 
-export const createHandler = (exports, generatedTypes) => {
+
+const jsHeaders = (extra = {}) => ({
+  "Content-Type": "application/javascript; charset=utf-8",
+  "Access-Control-Allow-Origin": "*",
+  ...extra,
+});
+
+const tsHeaders = () => ({
+  "Content-Type": "application/typescript; charset=utf-8",
+  "Access-Control-Allow-Origin": "*",
+  "Cache-Control": "no-cache",
+});
+
+export const createHandler = (exports, generatedTypes, minifiedCore, coreId) => {
   const exportKeys = Object.keys(exports);
   const iteratorStore = new Map();
   const instanceStore = new Map();
@@ -105,11 +104,15 @@ export const createHandler = (exports, generatedTypes) => {
     ws.send(stringify(data));
   };
 
+  const coreModuleCode = minifiedCore || CORE_CODE;
+  const corePath = `/${coreId || crypto.randomUUID()}.js`;
+
   return {
     async fetch(request) {
       const url = new URL(request.url);
       const upgradeHeader = request.headers.get("Upgrade");
 
+      // --- WebSocket upgrade (path-agnostic) ---
       if (upgradeHeader === "websocket") {
         const pair = new WebSocketPair();
         const [client, server] = Object.values(pair);
@@ -121,14 +124,12 @@ export const createHandler = (exports, generatedTypes) => {
             const msg = parse(event.data);
             const { type, id, path = [], args = [], iteratorId, instanceId } = msg;
 
-            // Keepalive ping/pong
             if (type === "ping") {
               send(server, { type: "pong", id });
               return;
             }
 
             if (type === "construct") {
-              // Class instantiation
               try {
                 const Ctor = getByPath(exports, path);
                 if (!isClass(Ctor)) {
@@ -148,7 +149,6 @@ export const createHandler = (exports, generatedTypes) => {
                 let thisArg;
 
                 if (instanceId !== undefined) {
-                  // Method call on instance
                   const instance = instanceStore.get(instanceId);
                   if (!instance) {
                     send(server, { type: "error", id, error: "Instance not found" });
@@ -157,7 +157,6 @@ export const createHandler = (exports, generatedTypes) => {
                   target = getByPath(instance, path);
                   thisArg = path.length > 1 ? getByPath(instance, path.slice(0, -1)) : instance;
                 } else {
-                  // Regular function call
                   target = getByPath(exports, path);
                   thisArg = path.length > 1 ? getByPath(exports, path.slice(0, -1)) : undefined;
                 }
@@ -167,7 +166,6 @@ export const createHandler = (exports, generatedTypes) => {
                   return;
                 }
 
-                // Await result to support both sync and async functions
                 const result = await target.apply(thisArg, args);
 
                 if (isReadableStream(result)) {
@@ -187,7 +185,6 @@ export const createHandler = (exports, generatedTypes) => {
                 send(server, { type: "error", id, error: String(err) });
               }
             } else if (type === "get") {
-              // Property access on instance
               try {
                 const instance = instanceStore.get(instanceId);
                 if (!instance) {
@@ -204,7 +201,6 @@ export const createHandler = (exports, generatedTypes) => {
                 send(server, { type: "error", id, error: String(err) });
               }
             } else if (type === "set") {
-              // Property assignment on instance
               try {
                 const instance = instanceStore.get(instanceId);
                 if (!instance) {
@@ -219,7 +215,6 @@ export const createHandler = (exports, generatedTypes) => {
                 send(server, { type: "error", id, error: String(err) });
               }
             } else if (type === "release") {
-              // Release instance
               instanceStore.delete(instanceId);
               send(server, { type: "result", id, value: true });
             } else if (type === "iterate-next") {
@@ -241,7 +236,6 @@ export const createHandler = (exports, generatedTypes) => {
               iteratorStore.delete(iteratorId);
               send(server, { type: "iterate-result", id, value: undefined, done: true });
             } else if (type === "stream-read") {
-              // ReadableStream chunk read
               const { streamId } = msg;
               const entry = streamStore.get(streamId);
               if (!entry) {
@@ -249,7 +243,6 @@ export const createHandler = (exports, generatedTypes) => {
                 return;
               }
               try {
-                // Get or create reader for this stream
                 let reader = entry.reader;
                 if (!reader) {
                   reader = entry.stream.getReader();
@@ -259,7 +252,6 @@ export const createHandler = (exports, generatedTypes) => {
                 if (done) {
                   streamStore.delete(streamId);
                 }
-                // Convert Uint8Array to array for devalue serialization
                 const serializedValue = value instanceof Uint8Array ? Array.from(value) : value;
                 send(server, { type: "stream-result", id, value: serializedValue, done: !!done });
               } catch (err) {
@@ -267,7 +259,6 @@ export const createHandler = (exports, generatedTypes) => {
                 send(server, { type: "error", id, error: String(err) });
               }
             } else if (type === "stream-cancel") {
-              // Cancel ReadableStream
               const { streamId } = msg;
               const entry = streamStore.get(streamId);
               if (entry) {
@@ -282,27 +273,19 @@ export const createHandler = (exports, generatedTypes) => {
               }
               send(server, { type: "result", id, value: true });
             } else if (type === "writable-create") {
-              // Create a WritableStream on server side
               const { targetPath, targetInstanceId } = msg;
               let chunks = [];
               const writableId = nextStreamId++;
 
               const writable = new WritableStream({
-                write(chunk) {
-                  chunks.push(chunk);
-                },
-                close() {
-                  // Resolve with all chunks when stream closes
-                },
-                abort(reason) {
-                  chunks = [];
-                }
+                write(chunk) { chunks.push(chunk); },
+                close() {},
+                abort(reason) { chunks = []; }
               });
 
               writableStreamStore.set(writableId, { writable, chunks, targetPath, targetInstanceId });
               send(server, { type: "result", id, writableId, valueType: "writablestream" });
             } else if (type === "writable-write") {
-              // Write chunk to WritableStream
               const { writableId, chunk } = msg;
               const entry = writableStreamStore.get(writableId);
               if (!entry) {
@@ -310,7 +293,6 @@ export const createHandler = (exports, generatedTypes) => {
                 return;
               }
               try {
-                // Convert array back to Uint8Array if needed
                 const data = Array.isArray(chunk) ? new Uint8Array(chunk) : chunk;
                 entry.chunks.push(data);
                 send(server, { type: "result", id, value: true });
@@ -318,7 +300,6 @@ export const createHandler = (exports, generatedTypes) => {
                 send(server, { type: "error", id, error: String(err) });
               }
             } else if (type === "writable-close") {
-              // Close WritableStream and return collected chunks
               const { writableId } = msg;
               const entry = writableStreamStore.get(writableId);
               if (!entry) {
@@ -326,10 +307,8 @@ export const createHandler = (exports, generatedTypes) => {
                 return;
               }
               writableStreamStore.delete(writableId);
-              // Return the collected data
               send(server, { type: "result", id, value: entry.chunks });
             } else if (type === "writable-abort") {
-              // Abort WritableStream
               const { writableId } = msg;
               writableStreamStore.delete(writableId);
               send(server, { type: "result", id, value: true });
@@ -349,43 +328,72 @@ export const createHandler = (exports, generatedTypes) => {
         return new Response(null, { status: 101, webSocket: client });
       }
 
-      const wsProtocol = url.protocol === "https:" ? "wss:" : "ws:";
-      const wsUrl = `${wsProtocol}//${url.host}${url.pathname}`;
+      // --- HTTP routing ---
 
-      // Serve TypeScript type definitions
-      if (url.searchParams.has("types") || url.pathname.endsWith(".d.ts")) {
-        const typeDefinitions = generatedTypes || generateTypeDefinitions(exports, exportKeys);
-        return new Response(typeDefinitions, {
-          headers: {
-            "Content-Type": "application/typescript; charset=utf-8",
-            "Access-Control-Allow-Origin": "*",
-            "Cache-Control": "no-cache",
-          },
+      const fullTypes = generatedTypes || generateTypeDefinitions(exports, exportKeys);
+      const pathname = url.pathname;
+
+      // Serve core module — long-cached, content-independent of deployment URL
+      if (pathname === corePath) {
+        return new Response(coreModuleCode, {
+          headers: jsHeaders({ "Cache-Control": "public, max-age=31536000, immutable" }),
         });
       }
 
-      // Generate named exports
-      const namedExports = exportKeys
-        .map((key) => `export const ${key} = createProxy([${JSON.stringify(key)}]);`)
-        .join("\n");
+      // Type definitions
+      if (url.searchParams.has("types") || pathname.endsWith(".d.ts")) {
+        if (pathname === "/" || pathname.endsWith(".d.ts")) {
+          return new Response(fullTypes, { headers: tsHeaders() });
+        }
+        // Per-export types — re-export from root to avoid duplication
+        const name = pathname.slice(1);
+        if (exportKeys.includes(name)) {
+          const code = `export { ${name} as default, ${name} } from "./?types";`;
+          return new Response(code, { headers: tsHeaders() });
+        }
+        return new Response("// Export not found", { status: 404, headers: tsHeaders() });
+      }
 
-      const clientCode = CLIENT_CODE
-        .replace("__WS_URL__", JSON.stringify(wsUrl))
-        .replace("__DEVALUE_STRINGIFY__", DEVALUE_STRINGIFY)
-        .replace("__DEVALUE_PARSE__", DEVALUE_PARSE)
-        .replace("__NAMED_EXPORTS__", namedExports);
+      const baseUrl = `${url.protocol}//${url.host}`;
 
-      // Build types URL for X-TypeScript-Types header
-      const typesUrl = `${url.protocol}//${url.host}${url.pathname}?types`;
+      // Root — re-exports all from ${corePath}
+      if (pathname === "/") {
+        const namedExports = exportKeys
+          .map((key) => `export const ${key} = createProxy([${JSON.stringify(key)}]);`)
+          .join("\n");
+        const code = [
+          `import { createProxy, createUploadStream } from ".${corePath}";`,
+          namedExports,
+          `export { createUploadStream };`,
+        ].join("\n");
 
-      return new Response(clientCode, {
-        headers: {
-          "Content-Type": "application/javascript; charset=utf-8",
-          "Access-Control-Allow-Origin": "*",
-          "Cache-Control": "no-cache",
-          "X-TypeScript-Types": typesUrl,
-        },
-      });
+        return new Response(code, {
+          headers: jsHeaders({
+            "Cache-Control": "no-cache",
+            "X-TypeScript-Types": `${baseUrl}/?types`,
+          }),
+        });
+      }
+
+      // Per-export path — e.g. /greet, /Counter
+      const exportName = pathname.slice(1);
+      if (exportKeys.includes(exportName)) {
+        const code = [
+          `import { createProxy } from ".${corePath}";`,
+          `const _export = createProxy([${JSON.stringify(exportName)}]);`,
+          `export default _export;`,
+          `export { _export as ${exportName} };`,
+        ].join("\n");
+
+        return new Response(code, {
+          headers: jsHeaders({
+            "Cache-Control": "no-cache",
+            "X-TypeScript-Types": `${baseUrl}/${exportName}?types`,
+          }),
+        });
+      }
+
+      return new Response("Not found", { status: 404 });
     },
   };
 };

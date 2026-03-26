@@ -1,5 +1,6 @@
-// Minimal devalue stringify implementation (compatible with sveltejs/devalue)
-export const DEVALUE_STRINGIFY = `
+// Core module code - self-contained ES module that derives WS URL from import.meta.url.
+// Served at /_core.js with long cache. Exports createProxy and createUploadStream.
+export const CORE_CODE = `
 const stringify = (value) => {
   const stringified = [];
   const indexes = new Map();
@@ -79,10 +80,7 @@ const stringify = (value) => {
   flatten(value);
   return JSON.stringify(stringified);
 };
-`;
 
-// Minimal devalue parse implementation (compatible with sveltejs/devalue)
-export const DEVALUE_PARSE = `
 const UNDEFINED = -1;
 const HOLE = -2;
 const NAN = -3;
@@ -153,20 +151,16 @@ const parse = (serialized) => {
 
   return hydrate(0);
 };
-`;
 
-export const CLIENT_CODE = `
-__DEVALUE_STRINGIFY__
-__DEVALUE_PARSE__
-
-const ws = new WebSocket(__WS_URL__);
+const _u = new URL("./", import.meta.url);
+_u.protocol = _u.protocol === "https:" ? "wss:" : "ws:";
+const ws = new WebSocket(_u.href);
 const pending = new Map();
 let nextId = 1;
 let keepaliveInterval = null;
 
 const ready = new Promise((resolve, reject) => {
   ws.onopen = () => {
-    // Start keepalive ping every 30 seconds
     keepaliveInterval = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(stringify({ type: "ping", id: 0 }));
@@ -196,7 +190,6 @@ const sendRequest = async (msg) => {
 ws.onmessage = (event) => {
   const msg = parse(event.data);
 
-  // Ignore pong responses (keepalive)
   if (msg.type === "pong") return;
 
   const resolver = pending.get(msg.id);
@@ -222,7 +215,6 @@ ws.onmessage = (event) => {
       };
       resolver.resolve(iteratorProxy);
     } else if (msg.valueType === "readablestream") {
-      // Create a ReadableStream proxy that pulls from server
       const streamId = msg.streamId;
       const stream = new ReadableStream({
         async pull(controller) {
@@ -243,7 +235,6 @@ ws.onmessage = (event) => {
       });
       resolver.resolve(stream);
     } else if (msg.valueType === "writablestream") {
-      // Create a WritableStream proxy that pushes to server
       const writableId = msg.writableId;
       const stream = new WritableStream({
         async write(chunk) {
@@ -266,14 +257,12 @@ ws.onmessage = (event) => {
     resolver.resolve({ value: msg.value, done: msg.done });
     pending.delete(msg.id);
   } else if (msg.type === "stream-result") {
-    // Convert array back to Uint8Array if it was serialized
     const value = Array.isArray(msg.value) ? new Uint8Array(msg.value) : msg.value;
     resolver.resolve({ value, done: msg.done });
     pending.delete(msg.id);
   }
 };
 
-// Proxy for remote class instances
 const createInstanceProxy = (instanceId, path = []) => {
   const proxy = new Proxy(function(){}, {
     get(_, prop) {
@@ -297,8 +286,7 @@ const createInstanceProxy = (instanceId, path = []) => {
   return proxy;
 };
 
-// Proxy for exports (functions, classes, objects)
-const createProxy = (path = []) => new Proxy(function(){}, {
+export const createProxy = (path = []) => new Proxy(function(){}, {
   get(_, prop) {
     if (prop === "then" || prop === Symbol.toStringTag) return undefined;
     return createProxy([...path, prop]);
@@ -311,7 +299,6 @@ const createProxy = (path = []) => new Proxy(function(){}, {
   }
 });
 
-// Helper to create a client-side WritableStream that can be passed to server functions
 export const createUploadStream = async () => {
   const result = await sendRequest({ type: "writable-create" });
   const writableId = result.writableId;
@@ -331,6 +318,4 @@ export const createUploadStream = async () => {
 
   return { stream, writableId };
 };
-
-__NAMED_EXPORTS__
 `;

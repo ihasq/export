@@ -33,6 +33,7 @@
   ],
   "dependencies": {
     "devalue": "^5.1.1",
+    "oxc-minify": "^0.121.0",
     "oxc-parser": "^0.121.0"
   }
 }

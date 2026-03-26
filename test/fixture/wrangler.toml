@@ -1,0 +1,7 @@
+name = "export-test-fixture"
+main = "node_modules/export-runtime/entry.js"
+compatibility_date = "2024-11-01"
+
+[alias]
+"__USER_MODULE__" = "./src/index.ts"
+"__GENERATED_TYPES__" = "./.export-types.js"
