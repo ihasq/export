@@ -8,7 +8,7 @@
     "export": "generate-export-types && wrangler deploy"
   },
   "dependencies": {
-    "export-runtime": "^0.0.7"
+    "export-runtime": "^0.0.8"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

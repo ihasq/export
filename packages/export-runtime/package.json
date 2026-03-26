@@ -1,6 +1,6 @@
 {
   "name": "export-runtime",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Cloudflare Workers ESM Export Framework Runtime",
   "keywords": [
     "cloudflare",
