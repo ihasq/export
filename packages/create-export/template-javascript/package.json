@@ -11,6 +11,6 @@
     "export-runtime": "^0.0.6"
   },
   "devDependencies": {
-    "wrangler": "^3.93.0"
+    "wrangler": "^4.0.0"
   }
 }
