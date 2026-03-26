@@ -4,22 +4,32 @@ import { ref, onMounted, onUnmounted } from "vue";
 const el = ref(null);
 const rotateX = ref(0);
 const rotateY = ref(0);
-const typedLines = ref([]);
 const cursorVisible = ref(true);
 
-const CODE_LINES = [
-  { text: 'import { greet, Counter }', cls: 'kw' },
-  { text: '  from "https://my-worker.dev/";\n', cls: 'str' },
-  { text: '\n', cls: '' },
-  { text: 'const msg = await greet("World");', cls: 'fn' },
-  { text: '// "Hello, World!"\n', cls: 'cmt' },
-  { text: '\n', cls: '' },
-  { text: 'const counter = await new Counter(0);', cls: 'fn' },
-  { text: 'await counter.increment();', cls: 'fn' },
-  { text: '// 1\n', cls: 'cmt' },
-  { text: 'await counter.increment();', cls: 'fn' },
-  { text: '// 2\n', cls: 'cmt' },
+// Each segment: { text, cls } — cls: kw (keyword), str (string), fn (function/method), cmt (comment), p (punctuation/plain)
+const CODE_SEGMENTS = [
+  { text: 'import', cls: 'kw' }, { text: ' { greet, Counter }', cls: 'p' },
+  { text: '\n  ', cls: 'p' }, { text: 'from', cls: 'kw' }, { text: ' ', cls: 'p' }, { text: '"https://my-worker.dev/"', cls: 'str' }, { text: ';', cls: 'p' },
+  { text: '\n\n', cls: 'p' },
+  { text: 'const', cls: 'kw' }, { text: ' msg = ', cls: 'p' }, { text: 'await', cls: 'kw' }, { text: ' ', cls: 'p' }, { text: 'greet', cls: 'fn' }, { text: '(', cls: 'p' }, { text: '"World"', cls: 'str' }, { text: ');', cls: 'p' },
+  { text: ' // "Hello, World!"', cls: 'cmt' },
+  { text: '\n\n', cls: 'p' },
+  { text: 'const', cls: 'kw' }, { text: ' counter = ', cls: 'p' }, { text: 'await', cls: 'kw' }, { text: ' ', cls: 'p' }, { text: 'new', cls: 'kw' }, { text: ' ', cls: 'p' }, { text: 'Counter', cls: 'fn' }, { text: '(0);', cls: 'p' },
+  { text: '\n\n', cls: 'p' },
+  { text: 'await', cls: 'kw' }, { text: ' counter.', cls: 'p' }, { text: 'increment', cls: 'fn' }, { text: '();', cls: 'p' },
+  { text: ' // 1', cls: 'cmt' },
+  { text: '\n', cls: 'p' },
+  { text: 'await', cls: 'kw' }, { text: ' counter.', cls: 'p' }, { text: 'increment', cls: 'fn' }, { text: '();', cls: 'p' },
+  { text: ' // 2', cls: 'cmt' },
 ];
+
+// Flatten all segments into a single character array with class info
+const ALL_CHARS = [];
+for (const seg of CODE_SEGMENTS) {
+  for (const ch of seg.text) {
+    ALL_CHARS.push({ ch, cls: seg.cls });
+  }
+}
 
 let rafId = null;
 let typeTimeout = null;
@@ -35,37 +45,28 @@ function onMouseMove(e) {
   });
 }
 
+const typedChars = ref(0);
+const lineCount = ref(1);
+
 function startTyping() {
-  let lineIdx = 0;
-  let charIdx = 0;
-  typedLines.value = [{ text: "", cls: CODE_LINES[0].cls }];
+  typedChars.value = 0;
+  lineCount.value = 1;
 
   function typeNext() {
-    if (lineIdx >= CODE_LINES.length) {
-      // Loop after pause
+    if (typedChars.value >= ALL_CHARS.length) {
       typeTimeout = setTimeout(() => {
-        typedLines.value = [{ text: "", cls: CODE_LINES[0].cls }];
-        lineIdx = 0;
-        charIdx = 0;
+        typedChars.value = 0;
+        lineCount.value = 1;
         typeNext();
       }, 3000);
       return;
     }
 
-    const line = CODE_LINES[lineIdx];
-    if (charIdx < line.text.length) {
-      typedLines.value[typedLines.value.length - 1].text += line.text[charIdx];
-      charIdx++;
-      const delay = line.text[charIdx - 1] === "\n" ? 400 : line.cls === "cmt" ? 25 : 45;
-      typeTimeout = setTimeout(typeNext, delay);
-    } else {
-      lineIdx++;
-      charIdx = 0;
-      if (lineIdx < CODE_LINES.length) {
-        typedLines.value.push({ text: "", cls: CODE_LINES[lineIdx].cls });
-      }
-      typeTimeout = setTimeout(typeNext, 80);
-    }
+    const c = ALL_CHARS[typedChars.value];
+    typedChars.value++;
+    if (c.ch === "\n") lineCount.value++;
+    const delay = c.ch === "\n" ? 300 : c.cls === "cmt" ? 25 : 45;
+    typeTimeout = setTimeout(typeNext, delay);
   }
 
   typeNext();
@@ -100,13 +101,13 @@ onMounted(() => {
       </div>
       <div class="terminal-body">
         <div class="line-numbers">
-          <span v-for="(_, i) in typedLines" :key="i">{{ i + 1 }}</span>
+          <span v-for="n in lineCount" :key="n">{{ n }}</span>
         </div>
         <pre class="code"><span
-  v-for="(line, i) in typedLines"
+  v-for="(c, i) in ALL_CHARS.slice(0, typedChars)"
   :key="i"
-  :class="line.cls"
->{{ line.text }}</span><span class="cursor" :class="{ off: !cursorVisible }">|</span></pre>
+  :class="c.cls"
+>{{ c.ch }}</span><span class="cursor" :class="{ off: !cursorVisible }">|</span></pre>
       </div>
     </div>
   </div>
