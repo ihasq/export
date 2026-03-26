@@ -49,11 +49,6 @@ function rpcClient(wsPath = "/") {
         iterateReturn: (iid) => send({ type: "iterate-return", iteratorId: iid }),
         streamRead: (sid) => send({ type: "stream-read", streamId: sid }),
         streamCancel: (sid) => send({ type: "stream-cancel", streamId: sid }),
-        writableCreate: () => send({ type: "writable-create" }),
-        writableWrite: (wid, chunk) =>
-          send({ type: "writable-write", writableId: wid, chunk }),
-        writableClose: (wid) => send({ type: "writable-close", writableId: wid }),
-        writableAbort: (wid) => send({ type: "writable-abort", writableId: wid }),
         close: () => ws.close(),
       })
     );
@@ -124,7 +119,6 @@ describe("HTTP routing", () => {
     assert.equal(res.status, 200);
     assert.ok(body.includes(`from "./${coreId}.js"`));
     assert.ok(body.includes("createProxy"));
-    assert.ok(body.includes("createUploadStream"));
   });
 
   it("GET / has correct headers", async () => {
@@ -215,7 +209,6 @@ describe("HTTP routing", () => {
     assert.ok(body.includes("export declare function greet"));
     assert.ok(body.includes("export declare class Counter"));
     assert.ok(body.includes("export declare const math"));
-    assert.ok(body.includes("createUploadStream"));
   });
 
   it("GET /?types has typescript content-type", async () => {
@@ -283,10 +276,6 @@ describe("generated type definitions", () => {
     assert.ok(types.includes("multiply(a: number, b: number): Promise<number>"));
   });
 
-  it("includes createUploadStream helper type", () => {
-    assert.ok(types.includes("createUploadStream(): Promise<{"));
-    assert.ok(types.includes("stream: WritableStream<any>"));
-  });
 });
 
 // ═════════════════════════════════════════════════════════════
@@ -457,34 +446,6 @@ describe("RPC: ReadableStream", () => {
 
   it("errors on non-existent stream", async () => {
     await assert.rejects(() => rpc.streamRead(99999), /Stream not found/);
-  });
-});
-
-// ═════════════════════════════════════════════════════════════
-//  RPC: WritableStream
-// ═════════════════════════════════════════════════════════════
-
-describe("RPC: WritableStream", () => {
-  it("creates, writes, and closes writable stream", async () => {
-    const r = await rpc.writableCreate();
-    assert.equal(r.valueType, "writablestream");
-    await rpc.writableWrite(r.writableId, [1, 2, 3]);
-    await rpc.writableWrite(r.writableId, [4, 5, 6]);
-    assert.equal((await rpc.writableClose(r.writableId)).value.length, 2);
-  });
-
-  it("aborts writable stream", async () => {
-    const r = await rpc.writableCreate();
-    await rpc.writableWrite(r.writableId, [1, 2, 3]);
-    assert.equal((await rpc.writableAbort(r.writableId)).value, true);
-  });
-
-  it("errors on non-existent writable write", async () => {
-    await assert.rejects(() => rpc.writableWrite(99999, [1]), /WritableStream not found/);
-  });
-
-  it("errors on non-existent writable close", async () => {
-    await assert.rejects(() => rpc.writableClose(99999), /WritableStream not found/);
   });
 });
 
@@ -915,14 +876,6 @@ describe("edge: HTTP routing boundaries", () => {
     assert.equal(next.done, true);
   });
 
-  it("writable stream with many chunks", async () => {
-    const w = await rpc.writableCreate();
-    for (let i = 0; i < 20; i++) {
-      await rpc.writableWrite(w.writableId, [i]);
-    }
-    const result = await rpc.writableClose(w.writableId);
-    assert.equal(result.value.length, 20);
-  });
 });
 
 // ═════════════════════════════════════════════════════════════
@@ -933,7 +886,6 @@ describe("shared: HTTP routing", () => {
   it("GET /?shared returns shared index module", async () => {
     const body = await fetch(`${BASE}/?shared`).then((r) => r.text());
     assert.ok(body.includes("createProxy"));
-    assert.ok(body.includes("createUploadStream"));
     assert.ok(body.includes("-shared.js")); // imports from shared core
   });
 

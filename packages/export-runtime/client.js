@@ -135,14 +135,6 @@ const sendRequest = async (msg) => {
   });
 };
 
-const makeWritable = (writableId) => new WritableStream({
-  async write(chunk) {
-    await sendRequest({ type: "writable-write", writableId, chunk: chunk instanceof Uint8Array ? Array.from(chunk) : chunk });
-  },
-  async close() { await sendRequest({ type: "writable-close", writableId }); },
-  async abort() { await sendRequest({ type: "writable-abort", writableId }); }
-});
-
 ws.onmessage = (event) => {
   const msg = parse(event.data);
   const resolver = pending.get(msg.id);
@@ -166,7 +158,6 @@ ws.onmessage = (event) => {
       },
       cancel: () => sendRequest({ type: "stream-cancel", streamId: msg.streamId })
     }));
-    else if (msg.valueType === "writablestream") resolver.resolve(makeWritable(msg.writableId));
     else resolver.resolve(msg.value);
   } else if (msg.type === "iterate-result") {
     resolver.resolve({ value: msg.value, done: msg.done });
@@ -199,11 +190,6 @@ export const createProxy = (path = []) => new Proxy(function(){}, {
   async apply(_, __, args) { return sendRequest({ type: "call", path, args }); },
   construct(_, args) { return sendRequest({ type: "construct", path, args }); }
 });
-
-export const createUploadStream = async () => {
-  const { writableId } = await sendRequest({ type: "writable-create" });
-  return { stream: makeWritable(writableId), writableId };
-};
 `;
 
 export const CORE_CODE = CORE_TEMPLATE.replace("__WS_SUFFIX__", "./");

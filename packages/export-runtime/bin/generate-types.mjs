@@ -212,11 +212,7 @@ for (const node of program.body) {
   }
 }
 
-// Add createUploadStream helper type
-lines.push("export declare function createUploadStream(): Promise<{");
-lines.push("  stream: WritableStream<any>;");
-lines.push("  writableId: number;");
-lines.push("}>;");
+
 
 const typeDefinitions = lines.join("\n");
 

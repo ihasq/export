@@ -27,14 +27,14 @@ export const createHandler = (exports, generatedTypes, minifiedCore, coreId, min
     .join("\n");
 
   const buildIndexModule = (cpath) =>
-    `import { createProxy, createUploadStream } from ".${cpath}";\n${namedExportsCode}\nexport { createUploadStream };`;
+    `import { createProxy } from ".${cpath}";\n${namedExportsCode}`;
 
   const buildExportModule = (cpath, name) =>
     `import { createProxy } from ".${cpath}";\nconst _export = createProxy([${JSON.stringify(name)}]);\nexport default _export;\nexport { _export as ${name} };`;
 
   // Dispatch a parsed devalue message to an RPC dispatcher
   const dispatchMessage = async (dispatcher, msg) => {
-    const { type, path = [], args = [], instanceId, iteratorId, streamId, writableId, chunk } = msg;
+    const { type, path = [], args = [], instanceId, iteratorId, streamId } = msg;
     switch (type) {
       case "ping": return { type: "pong" };
       case "call":
@@ -49,10 +49,6 @@ export const createHandler = (exports, generatedTypes, minifiedCore, coreId, min
       case "iterate-return": return dispatcher.rpcIterateReturn(iteratorId);
       case "stream-read": return dispatcher.rpcStreamRead(streamId);
       case "stream-cancel": return dispatcher.rpcStreamCancel(streamId);
-      case "writable-create": return dispatcher.rpcWritableCreate();
-      case "writable-write": return dispatcher.rpcWritableWrite(writableId, chunk);
-      case "writable-close": return dispatcher.rpcWritableClose(writableId);
-      case "writable-abort": return dispatcher.rpcWritableAbort(writableId);
     }
   };
 

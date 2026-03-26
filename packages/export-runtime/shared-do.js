@@ -18,8 +18,4 @@ export class SharedExportDO extends DurableObject {
   rpcIterateReturn(i) { return this.#d.rpcIterateReturn(i); }
   rpcStreamRead(s) { return this.#d.rpcStreamRead(s); }
   rpcStreamCancel(s) { return this.#d.rpcStreamCancel(s); }
-  rpcWritableCreate() { return this.#d.rpcWritableCreate(); }
-  rpcWritableWrite(w, c) { return this.#d.rpcWritableWrite(w, c); }
-  rpcWritableClose(w) { return this.#d.rpcWritableClose(w); }
-  rpcWritableAbort(w) { return this.#d.rpcWritableAbort(w); }
 }

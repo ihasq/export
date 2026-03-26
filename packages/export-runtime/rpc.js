@@ -19,14 +19,12 @@ export const isClass = (fn) =>
 export const RPC_METHODS = [
   "rpcCall", "rpcConstruct", "rpcInstanceCall", "rpcGet", "rpcSet", "rpcRelease",
   "rpcIterateNext", "rpcIterateReturn", "rpcStreamRead", "rpcStreamCancel",
-  "rpcWritableCreate", "rpcWritableWrite", "rpcWritableClose", "rpcWritableAbort",
 ];
 
 export function createRpcDispatcher(exports) {
   const instances = new Map();
   const iterators = new Map();
   const streams = new Map();
-  const writables = new Map();
   let nextId = 1;
 
   const requireInstance = (id) => {
@@ -126,36 +124,10 @@ export function createRpcDispatcher(exports) {
       return { type: "result", value: true };
     },
 
-    async rpcWritableCreate() {
-      const id = nextId++;
-      writables.set(id, { chunks: [] });
-      return { type: "result", writableId: id, valueType: "writablestream" };
-    },
-
-    async rpcWritableWrite(writableId, chunk) {
-      const entry = writables.get(writableId);
-      if (!entry) throw new Error("WritableStream not found");
-      entry.chunks.push(Array.isArray(chunk) ? new Uint8Array(chunk) : chunk);
-      return { type: "result", value: true };
-    },
-
-    async rpcWritableClose(writableId) {
-      const entry = writables.get(writableId);
-      if (!entry) throw new Error("WritableStream not found");
-      writables.delete(writableId);
-      return { type: "result", value: entry.chunks };
-    },
-
-    async rpcWritableAbort(writableId) {
-      writables.delete(writableId);
-      return { type: "result", value: true };
-    },
-
     clearAll() {
       instances.clear();
       iterators.clear();
       streams.clear();
-      writables.clear();
     },
   };
 }
