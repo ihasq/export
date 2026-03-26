@@ -1,3 +1,7 @@
+---
+description: "Stream data from Cloudflare Workers to clients using ReadableStream and AsyncGenerator with automatic proxying."
+---
+
 # Streaming
 
 Functions that return `ReadableStream` or `AsyncGenerator` are automatically proxied to the client.

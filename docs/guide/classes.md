@@ -1,3 +1,7 @@
+---
+description: "Export classes from your Worker and instantiate them remotely. Comlink-style proxy with full method calls, property access, and cleanup."
+---
+
 # Classes
 
 Export a class on the server, instantiate it remotely on the client. Instances live on the server and are accessed through proxies, similar to [Comlink](https://github.com/nicolo-ribaudo/comlink).

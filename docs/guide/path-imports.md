@@ -1,3 +1,7 @@
+---
+description: "Import individual exports by URL path, like esm.sh. The ~5KB core module is immutably cached for instant subsequent imports."
+---
+
 # Path-based Imports
 
 You can import individual exports by adding the export name to the URL path, similar to [esm.sh](https://esm.sh).

@@ -1,3 +1,7 @@
+---
+description: "Share state across multiple clients and Workers using Durable Objects. Add ?shared to the import URL for real-time collaboration."
+---
+
 # Shared Exports
 
 By default, each client connection has its own isolated state. **Shared Exports** let multiple clients -- and even other Workers -- share the same state via [Durable Objects](https://developers.cloudflare.com/durable-objects/).

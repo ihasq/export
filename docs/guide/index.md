@@ -1,3 +1,7 @@
+---
+description: "export lets you write normal functions and classes on a Cloudflare Worker, then import them from any client using just the Worker URL."
+---
+
 # What is export?
 
 **export** lets you write normal functions and classes on a Cloudflare Worker, then `import` them from any client -- browser, Node.js, Deno, or another Worker -- using just the Worker URL.

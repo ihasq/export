@@ -1,3 +1,7 @@
+---
+description: "Create a new export project, write server exports, run locally, and deploy to Cloudflare Workers in minutes."
+---
+
 # Getting Started
 
 ## Create a new project

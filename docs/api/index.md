@@ -1,3 +1,7 @@
+---
+description: "Complete list of serializable types supported by export: Date, Map, Set, BigInt, URL, TypedArrays, ReadableStream, AsyncIterator, and more."
+---
+
 # Supported Types
 
 All [structured-clonable](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm) types are supported via [devalue](https://github.com/sveltejs/devalue):

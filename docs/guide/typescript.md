@@ -1,3 +1,7 @@
+---
+description: "Precise TypeScript type definitions generated at build time with oxc-parser. Full type inference in Deno via X-TypeScript-Types header."
+---
+
 # TypeScript & Deno
 
 ## Automatic type inference in Deno

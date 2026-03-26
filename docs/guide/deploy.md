@@ -1,3 +1,7 @@
+---
+description: "Deploy your export project to Cloudflare Workers with a single command. Supports headless servers and CI environments."
+---
+
 # Deploy
 
 ## To Cloudflare Workers

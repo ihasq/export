@@ -1,0 +1,6 @@
+<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#0a0a0a"/>
+  <text x="600" y="260" text-anchor="middle" font-family="system-ui, sans-serif" font-size="96" font-weight="800" fill="#ffffff" letter-spacing="-4">export</text>
+  <text x="600" y="340" text-anchor="middle" font-family="system-ui, sans-serif" font-size="32" fill="#888888">Import your server as a module.</text>
+  <text x="600" y="420" text-anchor="middle" font-family="monospace" font-size="22" fill="#555555">import { greet } from "https://my-worker.dev/";</text>
+</svg>
