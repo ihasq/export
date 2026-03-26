@@ -3,7 +3,7 @@ import { defineConfig } from "vitepress";
 export default defineConfig({
   title: "export",
   description: "Turn any Cloudflare Worker into an importable ES module.",
-  base: "/export/",
+  // base: "/export/",  // Set this if deploying to a subpath
   cleanUrls: true,
 
   head: [
