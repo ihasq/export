@@ -2,6 +2,16 @@ name = "my-export-app"
 main = "node_modules/export-runtime/entry.js"
 compatibility_date = "2024-11-01"
 
+[durable_objects]
+bindings = [
+  { name = "SHARED_EXPORT", class_name = "SharedExportDO" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["SharedExportDO"]
+
 [alias]
 "__USER_MODULE__" = "./src/index.js"
 "__GENERATED_TYPES__" = "./.export-types.js"
+"__SHARED_MODULE__" = "./.export-shared.js"

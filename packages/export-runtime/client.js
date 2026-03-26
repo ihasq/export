@@ -1,6 +1,5 @@
-// Core module code - self-contained ES module that derives WS URL from import.meta.url.
-// Served at /_core.js with long cache. Exports createProxy and createUploadStream.
-export const CORE_CODE = `
+// Core module template. __WS_SUFFIX__ is replaced: "./" for normal, "./?shared" for shared.
+const CORE_TEMPLATE = `
 const stringify = (value) => {
   const stringified = [];
   const indexes = new Map();
@@ -152,7 +151,7 @@ const parse = (serialized) => {
   return hydrate(0);
 };
 
-const _u = new URL("./", import.meta.url);
+const _u = new URL("__WS_SUFFIX__", import.meta.url);
 _u.protocol = _u.protocol === "https:" ? "wss:" : "ws:";
 const ws = new WebSocket(_u.href);
 const pending = new Map();
@@ -319,3 +318,6 @@ export const createUploadStream = async () => {
   return { stream, writableId };
 };
 `;
+
+export const CORE_CODE = CORE_TEMPLATE.replace("__WS_SUFFIX__", "./");
+export const SHARED_CORE_CODE = CORE_TEMPLATE.replace("__WS_SUFFIX__", "./?shared");

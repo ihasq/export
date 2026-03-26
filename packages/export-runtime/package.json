@@ -29,6 +29,8 @@
     "entry.js",
     "handler.js",
     "client.js",
+    "rpc.js",
+    "shared-do.js",
     "bin/generate-types.mjs"
   ],
   "dependencies": {

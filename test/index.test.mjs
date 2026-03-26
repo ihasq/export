@@ -12,9 +12,9 @@ const BASE = `http://localhost:${PORT}`;
 
 // ─── Helpers ────────────────────────────────────────────────
 
-function rpcClient() {
+function rpcClient(wsPath = "/") {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://localhost:${PORT}/`);
+    const ws = new WebSocket(`ws://localhost:${PORT}${wsPath}`);
     let mid = 0;
     const pending = new Map();
 
@@ -922,5 +922,178 @@ describe("edge: HTTP routing boundaries", () => {
     }
     const result = await rpc.writableClose(w.writableId);
     assert.equal(result.value.length, 20);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════
+//  Shared Export: HTTP Routing
+// ═════════════════════════════════════════════════════════════
+
+describe("shared: HTTP routing", () => {
+  it("GET /?shared returns shared index module", async () => {
+    const body = await fetch(`${BASE}/?shared`).then((r) => r.text());
+    assert.ok(body.includes("createProxy"));
+    assert.ok(body.includes("createUploadStream"));
+    assert.ok(body.includes("-shared.js")); // imports from shared core
+  });
+
+  it("GET /greet?shared returns shared per-export module", async () => {
+    const body = await fetch(`${BASE}/greet?shared`).then((r) => r.text());
+    assert.ok(body.includes("export default"));
+    assert.ok(body.includes("as greet"));
+    assert.ok(body.includes("-shared.js"));
+  });
+
+  it("GET /<uuid>-shared.js returns shared core module", async () => {
+    // Extract shared core path from the index module
+    const indexBody = await fetch(`${BASE}/?shared`).then((r) => r.text());
+    const sharedCoreName = indexBody.match(/from "\.\/([^"]+)"/)?.[1];
+    assert.ok(sharedCoreName?.endsWith("-shared.js"));
+    const res = await fetch(`${BASE}/${sharedCoreName}`);
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get("cache-control"), /immutable/);
+    const body = await res.text();
+    assert.ok(body.includes("WebSocket"));
+    assert.ok(body.includes("?shared")); // WS URL includes ?shared
+  });
+
+  it("GET /nonexistent?shared returns 404", async () => {
+    assert.equal((await fetch(`${BASE}/nonexistent?shared`)).status, 404);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════
+//  Shared Export: Cross-Client State Sharing
+// ═════════════════════════════════════════════════════════════
+
+describe("shared: cross-client state sharing", () => {
+  it("two clients share the same Counter instance via DO", async () => {
+    const shared1 = await rpcClient("/?shared");
+    const shared2 = await rpcClient("/?shared");
+    try {
+      // Client 1 creates a Counter
+      const c = await shared1.construct(["Counter"], [0]);
+
+      // Client 1 increments
+      await shared1.instanceCall(c.instanceId, ["increment"]);
+      await shared1.instanceCall(c.instanceId, ["increment"]);
+
+      // Client 2 sees the same state (same DO, same instanceStore)
+      const count = await shared2.instanceCall(c.instanceId, ["getCount"]);
+      assert.equal(count.value, 2);
+
+      // Client 2 increments
+      await shared2.instanceCall(c.instanceId, ["increment"]);
+
+      // Client 1 sees Client 2's increment
+      const count2 = await shared1.instanceCall(c.instanceId, ["getCount"]);
+      assert.equal(count2.value, 3);
+    } finally {
+      shared1.close();
+      shared2.close();
+    }
+  });
+
+  it("shared function calls work", async () => {
+    const shared = await rpcClient("/?shared");
+    try {
+      assert.equal((await shared.call(["greet"], ["Shared"])).value, "Hello, Shared!");
+      assert.equal((await shared.call(["add"], [100, 200])).value, 300);
+    } finally {
+      shared.close();
+    }
+  });
+
+  it("shared nested object methods work", async () => {
+    const shared = await rpcClient("/?shared");
+    try {
+      assert.equal((await shared.call(["math", "multiply"], [6, 7])).value, 42);
+    } finally {
+      shared.close();
+    }
+  });
+
+  it("shared error propagation", async () => {
+    const shared = await rpcClient("/?shared");
+    try {
+      await assert.rejects(() => shared.call(["willThrow"]), /intentional error/);
+    } finally {
+      shared.close();
+    }
+  });
+
+  it("shared instance property get/set across clients", async () => {
+    const s1 = await rpcClient("/?shared");
+    const s2 = await rpcClient("/?shared");
+    try {
+      const c = await s1.construct(["Counter"], [0, "initial"]);
+      // s1 sets label
+      await s1.instanceSet(c.instanceId, ["label"], "updated-by-s1");
+      // s2 reads it
+      assert.equal(
+        (await s2.instanceGet(c.instanceId, ["label"])).value,
+        "updated-by-s1"
+      );
+    } finally {
+      s1.close();
+      s2.close();
+    }
+  });
+
+  it("shared and non-shared are isolated", async () => {
+    const normal = await rpcClient("/");
+    const shared = await rpcClient("/?shared");
+    try {
+      // Create Counter in normal mode
+      const cn = await normal.construct(["Counter"], [10]);
+      // Create Counter in shared mode
+      const cs = await shared.construct(["Counter"], [20]);
+
+      // They should have independent state
+      assert.equal((await normal.instanceCall(cn.instanceId, ["getCount"])).value, 10);
+      assert.equal((await shared.instanceCall(cs.instanceId, ["getCount"])).value, 20);
+
+      // Incrementing one doesn't affect the other
+      await normal.instanceCall(cn.instanceId, ["increment"]);
+      assert.equal((await normal.instanceCall(cn.instanceId, ["getCount"])).value, 11);
+      assert.equal((await shared.instanceCall(cs.instanceId, ["getCount"])).value, 20);
+    } finally {
+      normal.close();
+      shared.close();
+    }
+  });
+
+  it("shared async iterator works", async () => {
+    const shared = await rpcClient("/?shared");
+    try {
+      const r = await shared.call(["countUp"], [1, 3]);
+      assert.equal(r.valueType, "asynciterator");
+      const values = [];
+      let done = false;
+      while (!done) {
+        const next = await shared.iterateNext(r.iteratorId);
+        if (next.done) done = true; else values.push(next.value);
+      }
+      assert.deepEqual(values, [1, 2, 3]);
+    } finally {
+      shared.close();
+    }
+  });
+
+  it("shared ReadableStream works", async () => {
+    const shared = await rpcClient("/?shared");
+    try {
+      const r = await shared.call(["streamData"], [2]);
+      assert.equal(r.valueType, "readablestream");
+      const chunks = [];
+      let done = false;
+      while (!done) {
+        const next = await shared.streamRead(r.streamId);
+        if (next.done) done = true; else chunks.push(next.value);
+      }
+      assert.equal(chunks.length, 2);
+    } finally {
+      shared.close();
+    }
   });
 });

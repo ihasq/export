@@ -220,25 +220,88 @@ lines.push("}>;");
 
 const typeDefinitions = lines.join("\n");
 
-// --- Minify core module ---
+// --- Minify core modules ---
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const { CORE_CODE } = await import(path.join(__dirname, "..", "client.js"));
+const { CORE_CODE, SHARED_CORE_CODE } = await import(path.join(__dirname, "..", "client.js"));
 
-// CORE_CODE uses import.meta.url for WS URL — no placeholders needed.
 const minified = minifySync("_core.js", CORE_CODE);
 if (minified.errors?.length) {
-  console.error("Minification errors:", minified.errors);
+  console.error("Minification errors (core):", minified.errors);
+}
+
+const minifiedShared = minifySync("_core-shared.js", SHARED_CORE_CODE);
+if (minifiedShared.errors?.length) {
+  console.error("Minification errors (shared core):", minifiedShared.errors);
 }
 
 // Generate a unique ID per build for cache-busting the core module path
 const coreId = crypto.randomUUID();
 
-// Write as a JS module that exports type definitions, minified core, and core ID
+// Write as a JS module
 const outPath = path.join(cwd, ".export-types.js");
 fs.writeFileSync(outPath, [
   `export default ${JSON.stringify(typeDefinitions)};`,
   `export const minifiedCore = ${JSON.stringify(minified.code)};`,
+  `export const minifiedSharedCore = ${JSON.stringify(minifiedShared.code)};`,
   `export const coreId = ${JSON.stringify(coreId)};`,
 ].join("\n") + "\n");
+
+// Generate Worker-side shared import module (.export-shared.js)
+const exportNames = [];
+for (const node of program.body) {
+  if (node.type !== "ExportNamedDeclaration" || !node.declaration) continue;
+  const decl = node.declaration;
+  if (decl.id?.name) exportNames.push(decl.id.name);
+  else if (decl.declarations) {
+    for (const d of decl.declarations) {
+      if (d.id?.name) exportNames.push(d.id.name);
+    }
+  }
+}
+
+const sharedModulePath = path.join(cwd, ".export-shared.js");
+const sharedModuleLines = [
+  `import { env } from "cloudflare:workers";`,
+  ``,
+  `const getStub = (room = "default") =>`,
+  `  env.SHARED_EXPORT.get(env.SHARED_EXPORT.idFromName(room));`,
+  ``,
+  `const createSharedInstanceProxy = (stub, instanceId, path = []) =>`,
+  `  new Proxy(function(){}, {`,
+  `    get(_, prop) {`,
+  `      if (prop === "then" || prop === Symbol.toStringTag) return undefined;`,
+  `      if (prop === Symbol.dispose || prop === Symbol.asyncDispose || prop === "[release]")`,
+  `        return () => stub.rpcRelease(instanceId);`,
+  `      return createSharedInstanceProxy(stub, instanceId, [...path, prop]);`,
+  `    },`,
+  `    async apply(_, __, args) {`,
+  `      const r = await stub.rpcInstanceCall(instanceId, path, args);`,
+  `      return r.value;`,
+  `    },`,
+  `  });`,
+  ``,
+  `const createSharedProxy = (stub, path = []) =>`,
+  `  new Proxy(function(){}, {`,
+  `    get(_, prop) {`,
+  `      if (prop === "then" || prop === Symbol.toStringTag) return undefined;`,
+  `      return createSharedProxy(stub, [...path, prop]);`,
+  `    },`,
+  `    async apply(_, __, args) {`,
+  `      const r = await stub.rpcCall(path, args);`,
+  `      return r.value;`,
+  `    },`,
+  `    async construct(_, args) {`,
+  `      const r = await stub.rpcConstruct(path, args);`,
+  `      return createSharedInstanceProxy(stub, r.instanceId);`,
+  `    },`,
+  `  });`,
+  ``,
+  `const _stub = getStub();`,
+  ...exportNames.map(n => `export const ${n} = createSharedProxy(_stub, [${JSON.stringify(n)}]);`),
+  `export { getStub };`,
+];
+fs.writeFileSync(sharedModulePath, sharedModuleLines.join("\n") + "\n");
+
 console.log("Generated type definitions + minified core →", outPath);
+console.log("Generated shared import module →", sharedModulePath);
