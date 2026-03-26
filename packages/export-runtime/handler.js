@@ -13,26 +13,59 @@ const jsResponse = (body, extra = {}) =>
 const tsResponse = (body, status = 200) =>
   new Response(body, { status, headers: { "Content-Type": TS, ...CORS, "Cache-Control": "no-cache" } });
 
-export const createHandler = (exports, generatedTypes, minifiedCore, coreId, minifiedSharedCore) => {
-  const exportKeys = Object.keys(exports);
+export const createHandler = (moduleMap, generatedTypes, minifiedCore, coreId, minifiedSharedCore) => {
+  // moduleMap: { routePath: moduleNamespace, ... }
+  const moduleRoutes = Object.keys(moduleMap); // e.g. ["", "greet", "utils/math"]
+  const moduleExportKeys = {};
+  for (const [route, mod] of Object.entries(moduleMap)) {
+    moduleExportKeys[route] = Object.keys(mod);
+  }
 
   const coreModuleCode = minifiedCore || CORE_CODE;
   const sharedCoreModuleCode = minifiedSharedCore || SHARED_CORE_CODE;
   const corePath = `/${coreId || crypto.randomUUID()}.js`;
   const sharedCorePath = corePath.replace(".js", "-shared.js");
 
-  // Pre-generate the named exports string (same for shared and normal, only import source differs)
-  const namedExportsCode = exportKeys
-    .map((key) => `export const ${key} = createProxy([${JSON.stringify(key)}]);`)
-    .join("\n");
+  // Resolve a URL pathname to { route, exportName } or null
+  const resolveRoute = (pathname) => {
+    const p = pathname === "/" ? "" : pathname.slice(1);
 
-  const buildIndexModule = (cpath) =>
-    `import { createProxy } from ".${cpath}";\n${namedExportsCode}`;
+    // Exact module match: /greet → route "greet", /utils/math → route "utils/math"
+    if (moduleRoutes.includes(p)) {
+      return { route: p, exportName: null };
+    }
 
-  const buildExportModule = (cpath, name) =>
-    `import { createProxy } from ".${cpath}";\nconst _export = createProxy([${JSON.stringify(name)}]);\nexport default _export;\nexport { _export as ${name} };`;
+    // Try parent as module, last segment as export: /greet/foo → route "greet", export "foo"
+    const lastSlash = p.lastIndexOf("/");
+    if (lastSlash > 0) {
+      const parentRoute = p.slice(0, lastSlash);
+      const name = p.slice(lastSlash + 1);
+      if (moduleRoutes.includes(parentRoute) && moduleExportKeys[parentRoute]?.includes(name)) {
+        return { route: parentRoute, exportName: name };
+      }
+    }
 
-  // Dispatch a parsed devalue message to an RPC dispatcher
+    // Root module export: /greet → route "", export "greet" (only if no module named "greet")
+    if (moduleExportKeys[""]?.includes(p) && !p.includes("/")) {
+      return { route: "", exportName: p };
+    }
+
+    return null;
+  };
+
+  const buildIndexModule = (cpath, route) => {
+    const keys = moduleExportKeys[route] || [];
+    const namedExports = keys
+      .map((key) => `export const ${key} = createProxy([${JSON.stringify(route)}, ${JSON.stringify(key)}]);`)
+      .join("\n");
+    return `import { createProxy } from ".${cpath}";\n${namedExports}`;
+  };
+
+  const buildExportModule = (cpath, route, name) =>
+    `import { createProxy } from ".${cpath}";\n` +
+    `const _export = createProxy([${JSON.stringify(route)}, ${JSON.stringify(name)}]);\n` +
+    `export default _export;\nexport { _export as ${name} };`;
+
   const dispatchMessage = async (dispatcher, msg) => {
     const { type, path = [], args = [], instanceId, iteratorId, streamId } = msg;
     switch (type) {
@@ -83,7 +116,7 @@ export const createHandler = (exports, generatedTypes, minifiedCore, coreId, min
           const stub = env.SHARED_EXPORT.get(env.SHARED_EXPORT.idFromName(room));
           wireWebSocket(server, stub);
         } else {
-          const dispatcher = createRpcDispatcher(exports);
+          const dispatcher = createRpcDispatcher(moduleMap);
           wireWebSocket(server, dispatcher, () => dispatcher.clearAll());
         }
 
@@ -93,41 +126,52 @@ export const createHandler = (exports, generatedTypes, minifiedCore, coreId, min
       // --- HTTP routing ---
       const pathname = url.pathname;
 
-      // Core modules (cached immutably)
+      // Core modules
       if (pathname === corePath) return jsResponse(coreModuleCode, { "Cache-Control": IMMUTABLE });
       if (pathname === sharedCorePath) return jsResponse(sharedCoreModuleCode, { "Cache-Control": IMMUTABLE });
 
       // Type definitions
       if (url.searchParams.has("types")) {
-        if (pathname === "/") return tsResponse(generatedTypes || "");
-        const name = pathname.slice(1);
-        return exportKeys.includes(name)
-          ? tsResponse(`export { ${name} as default, ${name} } from "./?types";`)
-          : tsResponse("// Export not found", 404);
+        const p = pathname === "/" ? "" : pathname.slice(1);
+        // Module types
+        if (generatedTypes?.[p] !== undefined) {
+          return tsResponse(generatedTypes[p]);
+        }
+        // Per-export re-export
+        const resolved = resolveRoute(pathname);
+        if (resolved?.exportName) {
+          const routeTypesPath = resolved.route ? `./${resolved.route}?types` : "./?types";
+          const code = `export { ${resolved.exportName} as default, ${resolved.exportName} } from "${routeTypesPath}";`;
+          return tsResponse(code);
+        }
+        return tsResponse("// Not found", 404);
       }
-      if (pathname.endsWith(".d.ts")) return tsResponse(generatedTypes || "");
+      if (pathname.endsWith(".d.ts")) {
+        return tsResponse(generatedTypes?.[""] || "");
+      }
 
       const baseUrl = `${url.protocol}//${url.host}`;
       const cpath = isShared ? sharedCorePath : corePath;
 
-      // Root module
-      if (pathname === "/") {
-        return jsResponse(buildIndexModule(cpath), {
+      const resolved = resolveRoute(pathname);
+      if (!resolved) return new Response("Not found", { status: 404 });
+
+      const { route, exportName } = resolved;
+
+      if (exportName) {
+        // Per-export module
+        return jsResponse(buildExportModule(cpath, route, exportName), {
           "Cache-Control": "no-cache",
-          "X-TypeScript-Types": `${baseUrl}/?types`,
+          "X-TypeScript-Types": `${baseUrl}${pathname}?types`,
         });
       }
 
-      // Per-export module
-      const exportName = pathname.slice(1);
-      if (exportKeys.includes(exportName)) {
-        return jsResponse(buildExportModule(cpath, exportName), {
-          "Cache-Control": "no-cache",
-          "X-TypeScript-Types": `${baseUrl}/${exportName}?types`,
-        });
-      }
-
-      return new Response("Not found", { status: 404 });
+      // Module index
+      const typesPath = route ? `${baseUrl}/${route}?types` : `${baseUrl}/?types`;
+      return jsResponse(buildIndexModule(cpath, route), {
+        "Cache-Control": "no-cache",
+        "X-TypeScript-Types": typesPath,
+      });
     },
   };
 };

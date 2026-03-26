@@ -21,7 +21,19 @@ export const RPC_METHODS = [
   "rpcIterateNext", "rpcIterateReturn", "rpcStreamRead", "rpcStreamCancel",
 ];
 
-export function createRpcDispatcher(exports) {
+// moduleMap: { routePath: moduleNamespace, ... } or a single namespace (backward compat)
+export function createRpcDispatcher(moduleMap) {
+  // Normalize: if moduleMap has no "" key and looks like a namespace, wrap it
+  const isMap = typeof moduleMap === "object" && !moduleMap.__esModule && "" in moduleMap;
+  const resolveModule = (route) => {
+    if (isMap) {
+      const mod = moduleMap[route];
+      if (!mod) throw new Error(`Module not found: ${route}`);
+      return mod;
+    }
+    return moduleMap; // single namespace fallback
+  };
+
   const instances = new Map();
   const iterators = new Map();
   const streams = new Map();
@@ -50,19 +62,29 @@ export function createRpcDispatcher(exports) {
     return { type: "result", value: result };
   };
 
-  const callTarget = async (obj, path, args) => {
+  // path = [route, ...exportPath] — route selects the module, exportPath walks its exports
+  const splitPath = (path) => {
+    const [route, ...rest] = path;
+    return { exports: resolveModule(route), exportPath: rest };
+  };
+
+  const callTarget = async (obj, path, args, isRoot = false) => {
     const target = getByPath(obj, path);
-    const thisArg = path.length > 1 ? getByPath(obj, path.slice(0, -1)) : (obj === exports ? undefined : obj);
+    const thisArg = path.length > 1 ? getByPath(obj, path.slice(0, -1)) : (isRoot ? undefined : obj);
     if (typeof target !== "function") throw new Error(`${path.join(".")} is not a function`);
     return wrapResult(await target.apply(thisArg, args), path);
   };
 
   return {
-    rpcCall: (path, args = []) => callTarget(exports, path, args),
+    rpcCall(path, args = []) {
+      const { exports, exportPath } = splitPath(path);
+      return callTarget(exports, exportPath, args, true);
+    },
 
     async rpcConstruct(path, args = []) {
-      const Ctor = getByPath(exports, path);
-      if (!isClass(Ctor)) throw new Error(`${path.join(".")} is not a class`);
+      const { exports, exportPath } = splitPath(path);
+      const Ctor = getByPath(exports, exportPath);
+      if (!isClass(Ctor)) throw new Error(`${exportPath.join(".")} is not a class`);
       const id = nextId++;
       instances.set(id, new Ctor(...args));
       return { type: "result", instanceId: id, valueType: "instance" };

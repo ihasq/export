@@ -12,6 +12,6 @@ tag = "v1"
 new_classes = ["SharedExportDO"]
 
 [alias]
-"__USER_MODULE__" = "./src/index.js"
+"__USER_MODULE__" = "./.export-module-map.js"
 "__GENERATED_TYPES__" = "./.export-types.js"
 "__SHARED_MODULE__" = "./.export-shared.js"

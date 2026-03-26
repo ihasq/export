@@ -1,12 +1,12 @@
 import { DurableObject } from "cloudflare:workers";
-import * as userExports from "__USER_MODULE__";
+import moduleMap from "__USER_MODULE__";
 import { createRpcDispatcher } from "./rpc.js";
 
 export class SharedExportDO extends DurableObject {
   #d;
   constructor(ctx, env) {
     super(ctx, env);
-    this.#d = createRpcDispatcher(userExports);
+    this.#d = createRpcDispatcher(moduleMap);
   }
   rpcCall(p, a) { return this.#d.rpcCall(p, a); }
   rpcConstruct(p, a) { return this.#d.rpcConstruct(p, a); }

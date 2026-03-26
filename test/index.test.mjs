@@ -12,7 +12,8 @@ const BASE = `http://localhost:${PORT}`;
 
 // ─── Helpers ────────────────────────────────────────────────
 
-function rpcClient(wsPath = "/") {
+// route: default route prefix prepended to all path arrays (e.g., "" for root module)
+function rpcClient(wsPath = "/", route = "") {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://localhost:${PORT}${wsPath}`);
     let mid = 0;
@@ -34,10 +35,13 @@ function rpcClient(wsPath = "/") {
         ws.send(stringify({ ...msg, id }));
       });
 
+    // Prepend route to path arrays for call/construct
+    const rp = (p) => [route, ...p];
+
     ws.on("open", () =>
       resolve({
-        call: (p, args = []) => send({ type: "call", path: p, args }),
-        construct: (p, args = []) => send({ type: "construct", path: p, args }),
+        call: (p, args = []) => send({ type: "call", path: rp(p), args }),
+        construct: (p, args = []) => send({ type: "construct", path: rp(p), args }),
         instanceCall: (iid, p, args = []) =>
           send({ type: "call", instanceId: iid, path: p, args }),
         instanceGet: (iid, p) => send({ type: "get", instanceId: iid, path: p }),
@@ -826,7 +830,7 @@ describe("edge: WebSocket isolation", () => {
       ws.on("error", reject);
     });
     try {
-      const r = await rpc2.call(["add"], [100, 200]);
+      const r = await rpc2.call(["", "add"], [100, 200]);
       assert.equal(r.value, 300);
     } finally {
       rpc2.close();
@@ -1046,6 +1050,80 @@ describe("shared: cross-client state sharing", () => {
       assert.equal(chunks.length, 2);
     } finally {
       shared.close();
+    }
+  });
+});
+
+// ═════════════════════════════════════════════════════════════
+//  Multi-File Routing
+// ═════════════════════════════════════════════════════════════
+
+describe("multi-file: HTTP routing", () => {
+  it("GET /hello returns hello module index", async () => {
+    const body = await fetch(`${BASE}/hello`).then((r) => r.text());
+    assert.ok(body.includes("createProxy"));
+    assert.ok(body.includes('"hello"'));
+    assert.ok(body.includes('"sayHello"'));
+  });
+
+  it("GET /utils/math returns nested module index", async () => {
+    const body = await fetch(`${BASE}/utils/math`).then((r) => r.text());
+    assert.ok(body.includes("createProxy"));
+    assert.ok(body.includes('"utils/math"'));
+    assert.ok(body.includes('"multiply"'));
+  });
+
+  it("GET /hello?types returns types for hello module", async () => {
+    const body = await fetch(`${BASE}/hello?types`).then((r) => r.text());
+    assert.ok(body.includes("sayHello"));
+    assert.ok(body.includes("string"));
+  });
+
+  it("GET /utils/math?types returns types for math module", async () => {
+    const body = await fetch(`${BASE}/utils/math?types`).then((r) => r.text());
+    assert.ok(body.includes("multiply"));
+    assert.ok(body.includes("number"));
+  });
+
+  it("GET / still returns root module with all root exports", async () => {
+    const body = await fetch(`${BASE}/`).then((r) => r.text());
+    assert.ok(body.includes('"greet"'));
+    assert.ok(body.includes('"Counter"'));
+  });
+});
+
+describe("multi-file: RPC calls", () => {
+  it("calls hello module function via RPC", async () => {
+    const client = await rpcClient("/", "hello");
+    try {
+      const r = await client.call(["sayHello"], ["World"]);
+      assert.equal(r.value, "Hello from hello module, World!");
+    } finally {
+      client.close();
+    }
+  });
+
+  it("calls nested utils/math module function via RPC", async () => {
+    const client = await rpcClient("/", "utils/math");
+    try {
+      const r = await client.call(["multiply"], [6, 7]);
+      assert.equal(r.value, 42);
+    } finally {
+      client.close();
+    }
+  });
+
+  it("root module functions still work", async () => {
+    const r = await rpc.call(["greet"], ["World"]);
+    assert.equal(r.value, "Hello, World!");
+  });
+
+  it("error from nested module propagates", async () => {
+    const client = await rpcClient("/", "utils/math");
+    try {
+      await assert.rejects(() => client.call(["divide"], [1, 0]), /division by zero/);
+    } finally {
+      client.close();
     }
   });
 });

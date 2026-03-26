@@ -9,7 +9,7 @@ import { fileURLToPath } from "url";
 
 const cwd = process.cwd();
 
-// Read wrangler.toml to find user module path
+// Read wrangler.toml to find source root
 const wranglerPath = path.join(cwd, "wrangler.toml");
 if (!fs.existsSync(wranglerPath)) {
   console.error("wrangler.toml not found in", cwd);
@@ -22,17 +22,41 @@ if (!aliasMatch) {
   process.exit(1);
 }
 
-const userModulePath = path.resolve(cwd, aliasMatch[1]);
-if (!fs.existsSync(userModulePath)) {
-  console.error("User module not found:", userModulePath);
-  process.exit(1);
+// Derive source root directory from the alias (e.g., "./src/index.ts" → "./src")
+const aliasTarget = aliasMatch[1];
+// If alias points to the module map, resolve src dir from it; otherwise derive from file
+const srcDir = aliasTarget.includes(".export-module-map")
+  ? path.resolve(cwd, "src")
+  : path.resolve(cwd, path.dirname(aliasTarget.replace(/^\.\//, "")));
+
+// --- Discover all source files under srcDir ---
+
+const EXTENSIONS = [".ts", ".tsx", ".js", ".jsx"];
+
+function discoverModules(dir, base = "") {
+  const modules = [];
+  if (!fs.existsSync(dir)) return modules;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name.startsWith("_") || entry.name.startsWith(".")) continue;
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      modules.push(...discoverModules(fullPath, base ? `${base}/${entry.name}` : entry.name));
+    } else if (EXTENSIONS.includes(path.extname(entry.name))) {
+      const nameWithoutExt = entry.name.replace(/\.(ts|tsx|js|jsx)$/, "");
+      const routePath = nameWithoutExt === "index"
+        ? base  // index.ts → directory path ("" for root)
+        : (base ? `${base}/${nameWithoutExt}` : nameWithoutExt);
+      modules.push({ routePath, filePath: fullPath });
+    }
+  }
+  return modules;
 }
 
-const source = fs.readFileSync(userModulePath, "utf8");
-const isTS = userModulePath.endsWith(".ts") || userModulePath.endsWith(".tsx");
-const fileName = path.basename(userModulePath);
-const result = parseSync(fileName, source, { sourceType: "module" });
-const program = result.program;
+const modules = discoverModules(srcDir);
+if (modules.length === 0) {
+  console.error("No source files found in", srcDir);
+  process.exit(1);
+}
 
 // --- Type extraction helpers ---
 
@@ -52,14 +76,10 @@ function extractType(node) {
     case "TSBigIntKeyword": return "bigint";
     case "TSSymbolKeyword": return "symbol";
     case "TSObjectKeyword": return "object";
-    case "TSArrayType":
-      return `${extractType(ta.elementType)}[]`;
-    case "TSTupleType":
-      return `[${(ta.elementTypes || []).map(e => extractType(e)).join(", ")}]`;
-    case "TSUnionType":
-      return ta.types.map(t => extractType(t)).join(" | ");
-    case "TSIntersectionType":
-      return ta.types.map(t => extractType(t)).join(" & ");
+    case "TSArrayType": return `${extractType(ta.elementType)}[]`;
+    case "TSTupleType": return `[${(ta.elementTypes || []).map(e => extractType(e)).join(", ")}]`;
+    case "TSUnionType": return ta.types.map(t => extractType(t)).join(" | ");
+    case "TSIntersectionType": return ta.types.map(t => extractType(t)).join(" & ");
     case "TSLiteralType": {
       const lit = ta.literal;
       if (lit.type === "StringLiteral") return JSON.stringify(lit.value);
@@ -94,10 +114,8 @@ function extractType(node) {
       }).filter(Boolean);
       return `{ ${members.join("; ")} }`;
     }
-    case "TSTypeAnnotation":
-      return extractType(ta.typeAnnotation);
-    default:
-      return "any";
+    case "TSTypeAnnotation": return extractType(ta.typeAnnotation);
+    default: return "any";
   }
 }
 
@@ -116,105 +134,110 @@ function extractParams(params) {
   });
 }
 
-// Wrap return type: all functions become async over the network
 function wrapReturnType(returnType, isAsync, isGenerator) {
   if (isGenerator) {
-    // async generator → AsyncIterable<YieldType>
-    // extract inner type from AsyncGenerator<T> if present
     if (returnType.startsWith("AsyncGenerator")) {
       const inner = returnType.match(/^AsyncGenerator<(.+?)(?:,.*)?>/);
       return `Promise<AsyncIterable<${inner ? inner[1] : "any"}>>`;
     }
     return `Promise<AsyncIterable<${returnType === "any" ? "any" : returnType}>>`;
   }
-  // Already Promise<T> → keep as-is
   if (returnType.startsWith("Promise<")) return returnType;
-  // ReadableStream<T> → Promise<ReadableStream<T>>
   if (returnType.startsWith("ReadableStream")) return `Promise<${returnType}>`;
-  // Wrap in Promise
   return `Promise<${returnType}>`;
 }
 
-// --- Generate .d.ts ---
+// --- Extract types and export names from a single file ---
 
-const lines = [
-  "// Auto-generated type definitions (oxc-parser)",
-  "// All functions are async over the network",
-  "",
-];
+function extractFileTypes(filePath) {
+  const source = fs.readFileSync(filePath, "utf8");
+  const fileName = path.basename(filePath);
+  const result = parseSync(fileName, source, { sourceType: "module" });
+  const program = result.program;
 
-for (const node of program.body) {
-  if (node.type !== "ExportNamedDeclaration" || !node.declaration) continue;
-  const decl = node.declaration;
+  const lines = [];
+  const exportNames = [];
 
-  if (decl.type === "FunctionDeclaration") {
-    const name = decl.id.name;
-    const params = extractParams(decl.params);
-    const rawRet = decl.returnType ? extractType(decl.returnType) : "any";
-    const ret = wrapReturnType(rawRet, decl.async, decl.generator);
-    lines.push(`export declare function ${name}(${params.join(", ")}): ${ret};`);
-    lines.push("");
+  for (const node of program.body) {
+    if (node.type !== "ExportNamedDeclaration" || !node.declaration) continue;
+    const decl = node.declaration;
 
-  } else if (decl.type === "ClassDeclaration") {
-    const name = decl.id.name;
-    lines.push(`export declare class ${name} {`);
-    for (const member of decl.body.body) {
-      if (member.type === "MethodDefinition") {
-        const mName = member.key.name || member.key.value;
-        if (member.kind === "constructor") {
-          const params = extractParams(member.value.params);
-          lines.push(`  constructor(${params.join(", ")});`);
-        } else {
-          const params = extractParams(member.value.params);
-          const rawRet = member.value.returnType ? extractType(member.value.returnType) : "any";
-          const ret = wrapReturnType(rawRet, member.value.async, member.value.generator);
-          lines.push(`  ${mName}(${params.join(", ")}): ${ret};`);
-        }
-      } else if (member.type === "PropertyDefinition") {
-        // Skip private members
-        if (member.accessibility === "private") continue;
-        const mName = member.key.name;
-        const type = member.typeAnnotation ? extractType(member.typeAnnotation) : "any";
-        lines.push(`  ${mName}: ${type};`);
-      }
-    }
-    lines.push(`  [Symbol.dispose](): Promise<void>;`);
-    lines.push(`  "[release]"(): Promise<void>;`);
-    lines.push(`}`);
-    lines.push("");
-
-  } else if (decl.type === "VariableDeclaration") {
-    for (const d of decl.declarations) {
-      const name = d.id.name;
-      if (d.init?.type === "ObjectExpression") {
-        lines.push(`export declare const ${name}: {`);
-        for (const prop of d.init.properties) {
-          if (prop.type === "SpreadElement") continue;
-          const key = prop.key?.name || prop.key?.value;
-          if (prop.value?.type === "FunctionExpression" || prop.value?.type === "ArrowFunctionExpression") {
-            const params = extractParams(prop.value.params);
-            const rawRet = prop.value.returnType ? extractType(prop.value.returnType) : "any";
-            const ret = wrapReturnType(rawRet, prop.value.async, prop.value.generator);
-            lines.push(`  ${key}(${params.join(", ")}): ${ret};`);
+    if (decl.type === "FunctionDeclaration") {
+      const name = decl.id.name;
+      exportNames.push(name);
+      const params = extractParams(decl.params);
+      const rawRet = decl.returnType ? extractType(decl.returnType) : "any";
+      const ret = wrapReturnType(rawRet, decl.async, decl.generator);
+      lines.push(`export declare function ${name}(${params.join(", ")}): ${ret};`);
+      lines.push("");
+    } else if (decl.type === "ClassDeclaration") {
+      const name = decl.id.name;
+      exportNames.push(name);
+      lines.push(`export declare class ${name} {`);
+      for (const member of decl.body.body) {
+        if (member.type === "MethodDefinition") {
+          const mName = member.key.name || member.key.value;
+          if (member.kind === "constructor") {
+            lines.push(`  constructor(${extractParams(member.value.params).join(", ")});`);
           } else {
-            const type = d.id.typeAnnotation ? "any" : "any";
-            lines.push(`  ${key}: any;`);
+            const params = extractParams(member.value.params);
+            const rawRet = member.value.returnType ? extractType(member.value.returnType) : "any";
+            const ret = wrapReturnType(rawRet, member.value.async, member.value.generator);
+            lines.push(`  ${mName}(${params.join(", ")}): ${ret};`);
           }
+        } else if (member.type === "PropertyDefinition") {
+          if (member.accessibility === "private") continue;
+          const mName = member.key.name;
+          const type = member.typeAnnotation ? extractType(member.typeAnnotation) : "any";
+          lines.push(`  ${mName}: ${type};`);
         }
-        lines.push(`};`);
-        lines.push("");
-      } else {
-        const type = d.id.typeAnnotation ? extractType(d.id.typeAnnotation) : "any";
-        lines.push(`export declare const ${name}: ${type};`);
-        lines.push("");
+      }
+      lines.push(`  [Symbol.dispose](): Promise<void>;`);
+      lines.push(`  "[release]"(): Promise<void>;`);
+      lines.push(`}`);
+      lines.push("");
+    } else if (decl.type === "VariableDeclaration") {
+      for (const d of decl.declarations) {
+        const name = d.id.name;
+        exportNames.push(name);
+        if (d.init?.type === "ObjectExpression") {
+          lines.push(`export declare const ${name}: {`);
+          for (const prop of d.init.properties) {
+            if (prop.type === "SpreadElement") continue;
+            const key = prop.key?.name || prop.key?.value;
+            if (prop.value?.type === "FunctionExpression" || prop.value?.type === "ArrowFunctionExpression") {
+              const params = extractParams(prop.value.params);
+              const rawRet = prop.value.returnType ? extractType(prop.value.returnType) : "any";
+              const ret = wrapReturnType(rawRet, prop.value.async, prop.value.generator);
+              lines.push(`  ${key}(${params.join(", ")}): ${ret};`);
+            } else {
+              lines.push(`  ${key}: any;`);
+            }
+          }
+          lines.push(`};`);
+          lines.push("");
+        } else {
+          const type = d.id.typeAnnotation ? extractType(d.id.typeAnnotation) : "any";
+          lines.push(`export declare const ${name}: ${type};`);
+          lines.push("");
+        }
       }
     }
   }
+
+  return { types: lines.join("\n"), exportNames };
 }
 
+// --- Process all modules ---
 
+const typesMap = {};     // routePath → type definition string
+const exportsMap = {};   // routePath → export names array
 
-const typeDefinitions = lines.join("\n");
+for (const mod of modules) {
+  const { types, exportNames } = extractFileTypes(mod.filePath);
+  typesMap[mod.routePath] = types;
+  exportsMap[mod.routePath] = exportNames;
+}
 
 // --- Minify core modules ---
 
@@ -222,42 +245,39 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const { CORE_CODE, SHARED_CORE_CODE } = await import(path.join(__dirname, "..", "client.js"));
 
 const minified = minifySync("_core.js", CORE_CODE);
-if (minified.errors?.length) {
-  console.error("Minification errors (core):", minified.errors);
-}
+if (minified.errors?.length) console.error("Minification errors (core):", minified.errors);
 
 const minifiedShared = minifySync("_core-shared.js", SHARED_CORE_CODE);
-if (minifiedShared.errors?.length) {
-  console.error("Minification errors (shared core):", minifiedShared.errors);
-}
+if (minifiedShared.errors?.length) console.error("Minification errors (shared core):", minifiedShared.errors);
 
-// Generate a unique ID per build for cache-busting the core module path
 const coreId = crypto.randomUUID();
 
-// Write as a JS module
+// --- Write .export-types.js ---
+
 const outPath = path.join(cwd, ".export-types.js");
 fs.writeFileSync(outPath, [
-  `export default ${JSON.stringify(typeDefinitions)};`,
+  `export default ${JSON.stringify(typesMap)};`,
   `export const minifiedCore = ${JSON.stringify(minified.code)};`,
   `export const minifiedSharedCore = ${JSON.stringify(minifiedShared.code)};`,
   `export const coreId = ${JSON.stringify(coreId)};`,
 ].join("\n") + "\n");
 
-// Generate Worker-side shared import module (.export-shared.js)
-const exportNames = [];
-for (const node of program.body) {
-  if (node.type !== "ExportNamedDeclaration" || !node.declaration) continue;
-  const decl = node.declaration;
-  if (decl.id?.name) exportNames.push(decl.id.name);
-  else if (decl.declarations) {
-    for (const d of decl.declarations) {
-      if (d.id?.name) exportNames.push(d.id.name);
-    }
-  }
-}
+// --- Write .export-module-map.js ---
+
+const moduleMapPath = path.join(cwd, ".export-module-map.js");
+const relSrcDir = path.relative(cwd, srcDir);
+const mapLines = [];
+modules.forEach((mod, i) => {
+  const relFile = "./" + path.relative(cwd, mod.filePath).replace(/\\/g, "/");
+  mapLines.push(`import * as _${i} from ${JSON.stringify(relFile)};`);
+});
+mapLines.push(`export default { ${modules.map((mod, i) => `${JSON.stringify(mod.routePath)}: _${i}`).join(", ")} };`);
+fs.writeFileSync(moduleMapPath, mapLines.join("\n") + "\n");
+
+// --- Write .export-shared.js ---
 
 const sharedModulePath = path.join(cwd, ".export-shared.js");
-const sharedModuleLines = [
+const sharedLines = [
   `import { env } from "cloudflare:workers";`,
   ``,
   `const getStub = (room = "default") =>`,
@@ -294,10 +314,20 @@ const sharedModuleLines = [
   `  });`,
   ``,
   `const _stub = getStub();`,
-  ...exportNames.map(n => `export const ${n} = createSharedProxy(_stub, [${JSON.stringify(n)}]);`),
-  `export { getStub };`,
 ];
-fs.writeFileSync(sharedModulePath, sharedModuleLines.join("\n") + "\n");
+// Generate proxies for all modules' exports, prefixed with route
+for (const mod of modules) {
+  const names = exportsMap[mod.routePath] || [];
+  for (const n of names) {
+    const proxyPath = mod.routePath ? `[${JSON.stringify(mod.routePath)}, ${JSON.stringify(n)}]` : `[${JSON.stringify("")}, ${JSON.stringify(n)}]`;
+    const exportAlias = mod.routePath ? `${mod.routePath.replace(/\//g, "_")}_${n}` : n;
+    sharedLines.push(`export const ${exportAlias} = createSharedProxy(_stub, ${proxyPath});`);
+  }
+}
+sharedLines.push(`export { getStub };`);
+fs.writeFileSync(sharedModulePath, sharedLines.join("\n") + "\n");
 
+console.log(`Discovered ${modules.length} module(s): ${modules.map(m => m.routePath || "/").join(", ")}`);
 console.log("Generated type definitions + minified core →", outPath);
+console.log("Generated module map →", moduleMapPath);
 console.log("Generated shared import module →", sharedModulePath);
