@@ -8,8 +8,7 @@ const cursorVisible = ref(true);
 
 // Each segment: { text, cls } — cls: kw (keyword), str (string), fn (function/method), cmt (comment), p (punctuation/plain)
 const CODE_SEGMENTS = [
-  { text: 'import', cls: 'kw' }, { text: ' { greet, Counter }', cls: 'p' },
-  { text: '\n  ', cls: 'p' }, { text: 'from', cls: 'kw' }, { text: ' ', cls: 'p' }, { text: '"https://my-worker.dev/"', cls: 'str' }, { text: ';', cls: 'p' },
+  { text: 'import', cls: 'kw' }, { text: ' { greet, Counter } ', cls: 'p' }, { text: 'from', cls: 'kw' }, { text: ' ', cls: 'p' }, { text: '"https://my-worker.dev/"', cls: 'str' }, { text: ';', cls: 'p' },
   { text: '\n\n', cls: 'p' },
   { text: 'const', cls: 'kw' }, { text: ' msg = ', cls: 'p' }, { text: 'await', cls: 'kw' }, { text: ' ', cls: 'p' }, { text: 'greet', cls: 'fn' }, { text: '(', cls: 'p' }, { text: '"World"', cls: 'str' }, { text: ');', cls: 'p' },
   { text: ' // "Hello, World!"', cls: 'cmt' },
