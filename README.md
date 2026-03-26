@@ -1,33 +1,24 @@
 # export
 
-**Seamlessly export functions from Cloudflare Workers as ES modules.**
+**Turn any Cloudflare Worker into an importable ES module.**
 
-[![npm version](https://img.shields.io/npm/v/create-export.svg)](https://www.npmjs.com/package/create-export)
+Write functions on the server. Import them on the client. That's it.
+
 [![npm version](https://img.shields.io/npm/v/export-runtime.svg)](https://www.npmjs.com/package/export-runtime)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 ```javascript
-// Client-side: Just import from your Worker URL
 import { greet, Counter } from "https://my-worker.workers.dev/";
 
-const message = await greet("World");  // "Hello, World!"
-const counter = await new Counter(10);
-await counter.increment();  // 11
+await greet("World");                 // "Hello, World!"
+
+const counter = await new Counter(0);
+await counter.increment();            // 1
 ```
 
-## Features
+No SDK. No code generation. No build step on the client. Just `import`.
 
-- **Zero-config client** - Import directly from Worker URL, no SDK needed
-- **Path-based imports** - `import greet from "https://my-worker.workers.dev/greet"`
-- **Classes** - Full class support with Comlink-style instance management
-- **Streaming** - ReadableStream, WritableStream, AsyncIterator for real-time data
-- **Rich data types** - Date, Map, Set, BigInt, URL, ArrayBuffer, TypedArrays via [devalue](https://github.com/sveltejs/devalue)
-- **Precise TypeScript types** - Build-time static analysis with [oxc-parser](https://github.com/nicolo-ribaudo/oxc-parser)
-- **Deno support** - Auto-generated types via `X-TypeScript-Types` header
-- **Minified & cached** - Core module served with immutable cache, minified with [oxc-minify](https://github.com/nicolo-ribaudo/oxc-minify)
-- **Keepalive** - Automatic ping/pong to prevent idle disconnection
-
-## Quick Start
+## Getting Started
 
 ```bash
 npm create export my-app
@@ -36,129 +27,79 @@ npm install
 npm run dev
 ```
 
-## How It Works
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Your Worker                             │
-│                                                                 │
-│   // src/index.ts - Just write normal exports                  │
-│   export function greet(name: string) {                        │
-│     return `Hello, ${name}!`;                                  │
-│   }                                                            │
-│   export class Counter { ... }                                 │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ HTTP GET: Returns ESM glue code
-                              │ WebSocket: RPC over devalue
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                          Client                                 │
-│                                                                 │
-│   import { greet, Counter } from "https://my-worker.workers.dev/";
-│   await greet("World");         // "Hello, World!"             │
-│   const c = await new Counter(0);                              │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-1. Client imports from Worker URL
-2. Worker returns a thin ESM module that imports the core client library
-3. Core library establishes a WebSocket connection, serializes calls with [devalue](https://github.com/sveltejs/devalue)
-4. Results are returned as promises
-
-## Usage
-
-### Worker Side
-
-Write your functions and classes as normal ES module exports:
+Write your server code:
 
 ```typescript
 // src/index.ts
-
-// Sync functions become async on the client
-export function add(a: number, b: number): number {
-  return a + b;
-}
-
-// Async functions work as expected
-export async function greet(name: string): Promise<string> {
+export async function greet(name: string) {
   return `Hello, ${name}!`;
 }
 
-// Nested objects
-export const math = {
-  multiply(a: number, b: number): number {
-    return a * b;
-  },
-};
-
-// AsyncIterator for streaming
-export async function* countUp(start: number, end: number): AsyncGenerator<number> {
-  for (let i = start; i <= end; i++) {
-    await new Promise((r) => setTimeout(r, 100));
-    yield i;
-  }
+export function add(a: number, b: number) {
+  return a + b;
 }
 
-// ReadableStream for large data streaming
-export function streamData(count: number): ReadableStream<Uint8Array> {
-  let i = 0;
-  return new ReadableStream({
-    async pull(controller) {
-      if (i >= count) { controller.close(); return; }
-      controller.enqueue(new TextEncoder().encode(`chunk-${i++}\n`));
-    },
-  });
-}
-
-// Classes with Comlink-style instance management
 export class Counter {
   private count: number;
-
-  constructor(initial: number = 0) {
-    this.count = initial;
-  }
-
-  increment(): number { return ++this.count; }
-  decrement(): number { return --this.count; }
-  getCount(): number { return this.count; }
+  constructor(initial = 0) { this.count = initial; }
+  increment() { return ++this.count; }
+  getCount() { return this.count; }
 }
 ```
 
-### Client Side
+That's your entire API. Deploy with `npm run export`.
 
-#### Import all exports
+## Import from Anywhere
+
+### All exports at once
 
 ```javascript
-import { greet, add, math, Counter } from "https://my-worker.workers.dev/";
-
-await greet("World");       // "Hello, World!"
-await add(10, 20);          // 30
-await math.multiply(6, 7);  // 42
+import { greet, add, Counter } from "https://my-worker.workers.dev/";
 ```
 
-#### Import a single export by path
-
-Like [esm.sh](https://esm.sh), you can import individual exports by path:
+### Individual exports by path
 
 ```javascript
 import greet from "https://my-worker.workers.dev/greet";
 import Counter from "https://my-worker.workers.dev/Counter";
-
-await greet("World");
-const c = await new Counter(0);
 ```
 
-Both default and named exports are available on each path:
+### In Deno (with full type inference)
+
+```typescript
+import { greet } from "https://my-worker.workers.dev/";
+
+const msg = await greet("World");  // string - types just work
+```
+
+## Shared Exports
+
+Multiple clients can share the same state via [Durable Objects](https://developers.cloudflare.com/durable-objects/). Just add `?shared` to the import URL:
 
 ```javascript
-import { greet } from "https://my-worker.workers.dev/greet";       // named
-import greetDefault from "https://my-worker.workers.dev/greet";    // default
+// Client A
+import { Counter } from "https://my-worker.workers.dev/?shared";
+const counter = await new Counter(0);
+await counter.increment();  // 1
+
+// Client B (different browser, same URL)
+import { Counter } from "https://my-worker.workers.dev/?shared";
+await counter.increment();  // 2 -- sees Client A's state!
 ```
 
-#### AsyncIterator
+From within another Worker, the shared state is accessible via native [Workers RPC](https://developers.cloudflare.com/workers/runtime-apis/rpc/) -- no serialization overhead:
+
+```typescript
+import { Counter } from "./.export-shared.js";
+const counter = await new Counter(0);
+await counter.increment();  // Direct DO call, no devalue, no WebSocket
+```
+
+Shared exports use a single Durable Object instance per room. Rooms are `"default"` unless specified via `?shared&room=lobby`.
+
+## Streaming
+
+### AsyncIterator
 
 ```javascript
 import { countUp } from "https://my-worker.workers.dev/";
@@ -168,13 +109,12 @@ for await (const num of await countUp(1, 5)) {
 }
 ```
 
-#### ReadableStream
+### ReadableStream
 
 ```javascript
 import { streamData } from "https://my-worker.workers.dev/";
 
-const stream = await streamData(10);
-const reader = stream.getReader();
+const reader = (await streamData(10)).getReader();
 while (true) {
   const { value, done } = await reader.read();
   if (done) break;
@@ -182,149 +122,58 @@ while (true) {
 }
 ```
 
-#### Classes
+## Classes
+
+Classes work like [Comlink](https://github.com/nicolo-ribaudo/comlink) -- instantiate remotely, call methods, clean up when done:
 
 ```javascript
 import { Counter } from "https://my-worker.workers.dev/";
 
 const counter = await new Counter(10);
-console.log(await counter.getCount());   // 10
-console.log(await counter.increment());  // 11
-console.log(await counter.increment());  // 12
+await counter.increment();  // 11
+await counter.increment();  // 12
+await counter.getCount();   // 12
 
-// Explicit cleanup (optional - auto-cleaned on disconnect)
+// Cleanup (optional -- auto-cleaned on disconnect)
 await counter[Symbol.dispose]();
-// or: await counter["[release]"]();
 ```
 
-### Deno Support
+## Rich Data Types
 
-Deno automatically fetches type definitions via the `X-TypeScript-Types` header:
+Powered by [devalue](https://github.com/sveltejs/devalue), all structured-clonable types round-trip seamlessly:
 
-```typescript
-import { greet, Counter } from "https://my-worker.workers.dev/";
+`string` `number` `boolean` `null` `undefined` `Date` `RegExp` `Map` `Set` `BigInt` `URL` `URLSearchParams` `ArrayBuffer` `Uint8Array` `Int32Array` *(all TypedArrays)* `nested objects` `arrays` `circular references`
 
-const message = await greet("World");  // Full type inference
-```
+## How It Works
 
-Types are also available manually:
+1. You write normal `export` functions and classes on the server
+2. When a client imports your Worker URL, a tiny ESM module is returned
+3. That module opens a WebSocket and creates [Proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy) objects for each export
+4. Function calls are serialized and sent over WebSocket; results come back as promises
+5. The core client (~5KB, minified with [oxc](https://oxc.rs)) is served with immutable caching -- only fetched once
 
-```bash
-curl "https://my-worker.workers.dev/?types"
-curl "https://my-worker.workers.dev/greet?types"
-```
+For shared exports, the Worker bridges WebSocket messages to a Durable Object via native Workers RPC. No double serialization.
 
-## Supported Types
-
-All [structured-clonable](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm) types are supported via [devalue](https://github.com/sveltejs/devalue):
-
-| Type | Supported |
-|------|-----------|
-| Primitives (string, number, boolean, null) | ✅ |
-| undefined, NaN, Infinity, -0 | ✅ |
-| Date | ✅ |
-| RegExp | ✅ |
-| Map | ✅ |
-| Set | ✅ |
-| BigInt | ✅ |
-| ArrayBuffer | ✅ |
-| TypedArrays (Uint8Array, etc.) | ✅ |
-| URL | ✅ |
-| URLSearchParams | ✅ |
-| Nested objects and arrays | ✅ |
-| Circular references | ✅ |
-| ReadableStream | ✅ |
-| WritableStream | ✅ |
-| AsyncIterator | ✅ |
-| Classes | ✅ |
-| Functions | ❌ (use exports) |
-
-## Architecture
-
-### URL Routing
-
-| Endpoint | Content | Cache |
-|----------|---------|-------|
-| `GET /` | Index module — re-exports all via core | `no-cache` |
-| `GET /<name>` | Per-export module — default + named export | `no-cache` |
-| `GET /<uuid>.js` | Core module — minified RPC client | `immutable, max-age=1y` |
-| `GET /?types` | Full TypeScript definitions | `no-cache` |
-| `GET /<name>?types` | Re-export from root types | `no-cache` |
-| `WS /` (any path) | WebSocket RPC connection | — |
-
-### Caching Strategy
-
-The core client library (devalue + WebSocket + Proxy infrastructure) is served at a path with a **build-time generated UUID** (e.g., `/<uuid>.js`). This path changes on each deploy, enabling:
-
-- **Immutable caching** (`Cache-Control: public, max-age=31536000, immutable`) for the ~6KB core module
-- **Automatic cache busting** on redeploy — new UUID, new path
-- **Tiny per-export modules** (~130 bytes) that import from the cached core
-
-### Build-Time Type Generation
-
-Running `generate-export-types` (automatically called by `npm run dev` / `npm run export`) uses [oxc-parser](https://github.com/nicolo-ribaudo/oxc-parser) to statically analyze your TypeScript source and generate precise type definitions:
-
-```typescript
-// Instead of: greet(...args: any[]): Promise<any>
-// You get:    greet(name: string): Promise<string>
-```
-
-The core module is also minified with [oxc-minify](https://github.com/nicolo-ribaudo/oxc-minify), reducing the client payload by ~50%.
-
-### WebSocket RPC Protocol
-
-| Message | Direction | Purpose |
-|---------|-----------|---------|
-| `ping` / `pong` | Both | Keepalive (30s interval) |
-| `call` | Client → Server | Function / method call |
-| `construct` | Client → Server | Class instantiation |
-| `get` / `set` | Client → Server | Property access on instances |
-| `release` | Client → Server | Instance cleanup |
-| `iterate-next` / `iterate-return` | Client → Server | AsyncIterator protocol |
-| `stream-read` / `stream-cancel` | Client → Server | ReadableStream pull |
-| `writable-create` / `writable-write` / `writable-close` / `writable-abort` | Client → Server | WritableStream push |
-| `result` / `error` | Server → Client | Response |
-
-## Deployment
+## Deploy
 
 ```bash
 npm run export
 ```
 
-This runs `generate-export-types` (type generation + minification) then `wrangler deploy`.
-
-## Project Structure
-
-```
-my-app/
-├── src/
-│   └── index.ts          # Your exports
-├── .export-types.js       # Generated (types + minified core + UUID)
-├── package.json
-├── wrangler.toml
-└── tsconfig.json
-```
-
-## Testing
-
-```bash
-npm test
-```
-
-Runs 106 E2E tests against a live Wrangler dev server covering HTTP routing, type generation, WebSocket RPC, class instances, streams, iterators, devalue serialization, concurrency, and edge cases.
+This generates types (via [oxc-parser](https://oxc.rs)), minifies the client, and deploys to Cloudflare.
 
 ## Packages
 
 | Package | Description |
 |---------|-------------|
-| [create-export](https://www.npmjs.com/package/create-export) | CLI to scaffold new projects |
-| [export-runtime](https://www.npmjs.com/package/export-runtime) | Runtime that powers the RPC |
+| [`create-export`](https://www.npmjs.com/package/create-export) | `npm create export` -- scaffold a new project |
+| [`export-runtime`](https://www.npmjs.com/package/export-runtime) | The runtime that powers everything |
 
 ## Requirements
 
 - Node.js 18+
-- Cloudflare Workers account (free tier works)
+- Cloudflare Workers account ([free tier](https://developers.cloudflare.com/workers/platform/pricing/) works)
 
 ## License
 
-MIT
+[MIT](LICENSE)
