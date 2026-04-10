@@ -166,7 +166,19 @@ Binding names must be `UPPER_SNAKE_CASE`. The `wrangler.toml` will be auto-gener
 
 ### Authentication
 
-When `auth: true` is set, authentication is enabled via [better-auth](https://better-auth.com):
+Enable authentication via [better-auth](https://better-auth.com):
+
+```bash
+# Add OAuth provider
+npm run auth:add -- google YOUR_CLIENT_ID:YOUR_CLIENT_SECRET
+npm run auth:add -- github YOUR_CLIENT_ID:YOUR_CLIENT_SECRET
+
+# List/remove providers
+npm run auth:list
+npm run auth:remove -- google
+```
+
+Then use from the client:
 
 ```javascript
 // Email/password
