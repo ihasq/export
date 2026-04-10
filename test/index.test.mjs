@@ -53,6 +53,7 @@ function rpcClient(wsPath = "/", route = "") {
         iterateReturn: (iid) => send({ type: "iterate-return", iteratorId: iid }),
         streamRead: (sid) => send({ type: "stream-read", streamId: sid }),
         streamCancel: (sid) => send({ type: "stream-cancel", streamId: sid }),
+        auth: (method, opts = {}) => send({ type: "auth", method, ...opts }),
         close: () => ws.close(),
       })
     );
@@ -1182,5 +1183,147 @@ describe("static assets", () => {
   it("GET /nonexistent-file.txt returns 404 from static assets", async () => {
     const res = await fetch(`${BASE}/nonexistent-file.txt`);
     assert.equal(res.status, 404);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════
+//  Auth: Placeholder Responses
+// ═════════════════════════════════════════════════════════════
+
+describe("auth: placeholder responses", () => {
+  it("signIn.social returns error with provider name", async () => {
+    const r = await rpc.auth("signIn.social", { provider: "google" });
+    assert.equal(r.type, "result");
+    assert.ok(r.value.error.includes("Auth not configured"));
+    assert.ok(r.value.error.includes("google"));
+  });
+
+  it("signIn.email returns error", async () => {
+    const r = await rpc.auth("signIn.email", { email: "test@example.com", password: "secret" });
+    assert.equal(r.type, "result");
+    assert.ok(r.value.error.includes("Auth not configured"));
+  });
+
+  it("signUp.email returns error", async () => {
+    const r = await rpc.auth("signUp.email", { email: "new@example.com", password: "secret" });
+    assert.equal(r.type, "result");
+    assert.ok(r.value.error.includes("Auth not configured"));
+  });
+
+  it("signOut returns success", async () => {
+    const r = await rpc.auth("signOut");
+    assert.equal(r.type, "result");
+    assert.deepEqual(r.value, { success: true });
+  });
+
+  it("getSession returns null", async () => {
+    const r = await rpc.auth("getSession");
+    assert.equal(r.type, "result");
+    assert.equal(r.value, null);
+  });
+
+  it("getUser returns null", async () => {
+    const r = await rpc.auth("getUser");
+    assert.equal(r.type, "result");
+    assert.equal(r.value, null);
+  });
+
+  it("unknown auth method throws error", async () => {
+    await assert.rejects(
+      () => rpc.auth("unknownMethod"),
+      /Unknown auth method: unknownMethod/
+    );
+  });
+
+  it("signIn.social with different providers returns provider-specific message", async () => {
+    const providers = ["github", "discord", "twitter"];
+    for (const provider of providers) {
+      const r = await rpc.auth("signIn.social", { provider });
+      assert.ok(r.value.error.includes(provider), `should include provider name: ${provider}`);
+    }
+  });
+});
+
+// ═════════════════════════════════════════════════════════════
+//  Auth: Configuration (generate-types.mjs)
+// ═════════════════════════════════════════════════════════════
+
+describe("auth: configuration", () => {
+  const tempDir = path.join(FIXTURE_DIR, ".auth-test-temp");
+
+  it("AUTH_DB is auto-injected when auth is enabled", async () => {
+    // Create a temporary directory with auth config
+    fs.mkdirSync(tempDir, { recursive: true });
+    fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, "src", "index.ts"), "export const foo = 1;");
+    fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({
+      name: "auth-test",
+      exports: "./src",
+      cloudflare: {
+        auth: { providers: ["google"] }
+      }
+    }));
+
+    try {
+      execSync("npx generate-export-types", { cwd: tempDir, stdio: "pipe" });
+
+      // Check generated config
+      const config = fs.readFileSync(path.join(tempDir, ".export-config.js"), "utf8");
+      assert.ok(config.includes('"AUTH_DB"'), "AUTH_DB should be auto-injected");
+
+      // Check wrangler.toml includes AUTH_DB binding
+      const wrangler = fs.readFileSync(path.join(tempDir, "wrangler.toml"), "utf8");
+      assert.ok(wrangler.includes('binding = "AUTH_DB"'), "wrangler.toml should have AUTH_DB binding");
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("AUTH_DB is not duplicated if already specified", async () => {
+    fs.mkdirSync(tempDir, { recursive: true });
+    fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, "src", "index.ts"), "export const foo = 1;");
+    fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({
+      name: "auth-test",
+      exports: "./src",
+      cloudflare: {
+        d1: ["AUTH_DB", "OTHER_DB"],
+        auth: { providers: ["google"] }
+      }
+    }));
+
+    try {
+      execSync("npx generate-export-types", { cwd: tempDir, stdio: "pipe" });
+
+      const config = fs.readFileSync(path.join(tempDir, ".export-config.js"), "utf8");
+      // Count occurrences of AUTH_DB - should be exactly 1
+      const matches = config.match(/AUTH_DB/g);
+      assert.equal(matches?.length, 1, "AUTH_DB should appear exactly once");
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("no AUTH_DB when auth is not configured", async () => {
+    fs.mkdirSync(tempDir, { recursive: true });
+    fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, "src", "index.ts"), "export const foo = 1;");
+    fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({
+      name: "no-auth-test",
+      exports: "./src",
+      cloudflare: {
+        d1: ["MY_DB"]
+      }
+    }));
+
+    try {
+      execSync("npx generate-export-types", { cwd: tempDir, stdio: "pipe" });
+
+      const config = fs.readFileSync(path.join(tempDir, ".export-config.js"), "utf8");
+      assert.ok(!config.includes("AUTH_DB"), "AUTH_DB should not be present when auth is disabled");
+      assert.ok(config.includes("MY_DB"), "MY_DB should be present");
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });
