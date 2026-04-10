@@ -304,9 +304,12 @@ export const createHandler = (moduleMap, generatedTypes, minifiedCore, coreId, m
         const msg = parse(event.data);
         id = msg.id;
 
-        // Handle auth token updates
-        if (msg.type === "auth" && msg.method === "setToken" && msg.token) {
+        // Handle auth token updates (on reconnect or explicit setToken)
+        if (msg.type === "auth" && msg.token && !msg.method) {
+          // Direct token send on reconnect - just update session
           wsSession.token = msg.token;
+          server.send(stringify({ type: "auth-result", id, success: true }));
+          return;
         }
 
         const result = await dispatchMessage(dispatcher, msg, env, wsSession);
