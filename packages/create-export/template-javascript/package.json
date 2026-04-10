@@ -3,12 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": "./src",
   "scripts": {
     "dev": "generate-export-types && wrangler dev",
     "export": "generate-export-types && wrangler deploy"
   },
   "dependencies": {
-    "export-runtime": "^0.0.9"
+    "export-runtime": "^0.0.10"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

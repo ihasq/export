@@ -33,8 +33,10 @@ The core client library (~5KB) is served with immutable caching and changes path
 
 - **Zero-config client** -- just `import` from a URL
 - **Path-based imports** -- `import greet from ".../greet"`
+- **Static assets** -- serve HTML, CSS, and images alongside your API
 - **Classes** -- remote instantiation with Comlink-style proxies
 - **Streaming** -- ReadableStream and AsyncIterator support
 - **Shared exports** -- cross-client shared state via Durable Objects
 - **TypeScript** -- precise types generated at build time with oxc-parser
 - **Rich serialization** -- Date, Map, Set, BigInt, URL, TypedArrays, and more
+- **Single config** -- everything in `package.json`, `wrangler.toml` is auto-generated

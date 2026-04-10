@@ -18,10 +18,29 @@ This scaffolds a project with everything you need:
 my-app/
 ├── src/
 │   └── index.ts       # Your exports
-├── package.json
-├── wrangler.toml
+├── package.json       # Configuration
 └── tsconfig.json
 ```
+
+## Configuration
+
+All configuration lives in `package.json`:
+
+```json
+{
+  "name": "my-export-app",
+  "exports": "./src",
+  "main": "./public"
+}
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Worker name (used for deployment) |
+| `exports` | Yes | Source entry point (`./src` or `./src/index.ts`) |
+| `main` | No | Static assets directory (e.g., `./public`) |
+
+The `wrangler.toml` is auto-generated when you run `npm run dev` or `npm run export` -- you don't need to manage it manually.
 
 ## Write your exports
 
@@ -45,6 +64,10 @@ export class Counter {
 ```
 
 Every named export becomes remotely callable. Sync functions automatically become async on the client.
+
+::: warning
+`export default` is ignored. Use named exports only.
+:::
 
 ## Run locally
 
@@ -70,6 +93,7 @@ This generates type definitions, minifies the client, and deploys to Cloudflare 
 ## Next steps
 
 - [Path-based imports](/guide/path-imports) -- import individual exports
+- [Static Assets](/guide/static-assets) -- serve HTML, CSS, and other files
 - [Classes](/guide/classes) -- remote class instantiation
 - [Streaming](/guide/streaming) -- AsyncIterator and ReadableStream
 - [Shared Exports](/guide/shared-exports) -- cross-client shared state

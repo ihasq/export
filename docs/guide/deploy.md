@@ -12,8 +12,26 @@ npm run export
 
 This runs two steps:
 
-1. **`generate-export-types`** -- parses your source with oxc-parser, generates type definitions, minifies the client, and produces a unique cache-busting UUID
+1. **`generate-export-types`** -- reads `package.json`, parses your source with oxc-parser, generates type definitions, minifies the client, produces a unique cache-busting UUID, and auto-generates `wrangler.toml`
 2. **`wrangler deploy`** -- deploys your Worker to Cloudflare
+
+## Generated files
+
+The build process generates several files in your project root:
+
+| File | Purpose |
+|------|---------|
+| `wrangler.toml` | Auto-generated Cloudflare configuration |
+| `.export-types.js` | Type definitions and minified client core |
+| `.export-module-map.js` | Module routing map |
+| `.export-shared.js` | Shared state proxies for Workers RPC |
+
+These files are regenerated on each build. You can add them to `.gitignore`:
+
+```gitignore
+wrangler.toml
+.export-*.js
+```
 
 ## Environment setup
 

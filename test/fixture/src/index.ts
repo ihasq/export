@@ -1,3 +1,8 @@
+// --- Default export (should be ignored by the runtime) ---
+export default function ignored() {
+  return "This should not be accessible";
+}
+
 // --- Async function ---
 export async function greet(name: string): Promise<string> {
   return `Hello, ${name}!`;

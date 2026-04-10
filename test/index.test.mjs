@@ -145,6 +145,11 @@ describe("HTTP routing", () => {
     }
   });
 
+  it("GET / does not include default export", async () => {
+    const body = await fetch(`${BASE}/`).then((r) => r.text());
+    assert.ok(!body.includes('"default"'), "default export should be ignored");
+  });
+
   it("GET /<uuid>.js returns minified core module", async () => {
     const res = await fetch(`${BASE}/${coreId}.js`);
     const body = await res.text();
@@ -165,7 +170,8 @@ describe("HTTP routing", () => {
     try {
       fs.mkdirSync(tmp, { recursive: true });
       fs.cpSync(path.join(FIXTURE_DIR, "src"), path.join(tmp, "src"), { recursive: true });
-      fs.copyFileSync(path.join(FIXTURE_DIR, "wrangler.toml"), path.join(tmp, "wrangler.toml"));
+      // Copy package.json (wrangler.toml is now auto-generated)
+      fs.copyFileSync(path.join(FIXTURE_DIR, "package.json"), path.join(tmp, "package.json"));
       fs.mkdirSync(path.join(tmp, "node_modules"), { recursive: true });
       // Symlink export-runtime so generate-export-types works
       fs.symlinkSync(
@@ -206,6 +212,10 @@ describe("HTTP routing", () => {
 
   it("GET /nonexistent returns 404", async () => {
     assert.equal((await fetch(`${BASE}/nonexistent`)).status, 404);
+  });
+
+  it("GET /default returns 404 (default export is ignored)", async () => {
+    assert.equal((await fetch(`${BASE}/default`)).status, 404);
   });
 
   it("GET /?types returns full type definitions", async () => {
@@ -317,6 +327,10 @@ describe("RPC: function calls", () => {
 
   it("handles ping/pong", async () => {
     assert.equal((await rpc.ping()).type, "pong");
+  });
+
+  it("errors when calling default export", async () => {
+    await assert.rejects(() => rpc.call(["default"]), /Export not found: default/);
   });
 });
 
@@ -1125,5 +1139,48 @@ describe("multi-file: RPC calls", () => {
     } finally {
       client.close();
     }
+  });
+});
+
+// ═════════════════════════════════════════════════════════════
+//  Static Assets
+// ═════════════════════════════════════════════════════════════
+
+describe("static assets", () => {
+  it("GET /test.html returns static HTML file", async () => {
+    const res = await fetch(`${BASE}/test.html`);
+    assert.equal(res.status, 200);
+    const body = await res.text();
+    assert.ok(body.includes("<h1>Static Asset Test</h1>"));
+    assert.ok(res.headers.get("content-type")?.includes("text/html"));
+  });
+
+  it("GET /style.css returns static CSS file", async () => {
+    const res = await fetch(`${BASE}/style.css`);
+    assert.equal(res.status, 200);
+    const body = await res.text();
+    assert.ok(body.includes("color: red"));
+    assert.ok(res.headers.get("content-type")?.includes("text/css"));
+  });
+
+  it("GET /data.json returns static JSON file", async () => {
+    const res = await fetch(`${BASE}/data.json`);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.deepEqual(body, { test: true });
+    assert.ok(res.headers.get("content-type")?.includes("application/json"));
+  });
+
+  it("RPC routes take precedence over static assets", async () => {
+    // /greet is an RPC export, not a static file
+    const res = await fetch(`${BASE}/greet`);
+    assert.equal(res.status, 200);
+    const body = await res.text();
+    assert.ok(body.includes("createProxy"), "should return RPC module, not static file");
+  });
+
+  it("GET /nonexistent-file.txt returns 404 from static assets", async () => {
+    const res = await fetch(`${BASE}/nonexistent-file.txt`);
+    assert.equal(res.status, 404);
   });
 });

@@ -104,7 +104,7 @@ export default defineConfig({
       { text: "Guide", link: "/guide/getting-started" },
       { text: "API", link: "/api/" },
       {
-        text: "0.0.8",
+        text: "0.0.10",
         items: [
           {
             text: "Changelog",
@@ -130,6 +130,7 @@ export default defineConfig({
         text: "Features",
         items: [
           { text: "Path-based Imports", link: "/guide/path-imports" },
+          { text: "Static Assets", link: "/guide/static-assets" },
           { text: "Classes", link: "/guide/classes" },
           { text: "Streaming", link: "/guide/streaming" },
           { text: "Shared Exports", link: "/guide/shared-exports" },

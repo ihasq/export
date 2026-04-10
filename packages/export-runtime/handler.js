@@ -18,7 +18,12 @@ export const createHandler = (moduleMap, generatedTypes, minifiedCore, coreId, m
   const moduleRoutes = Object.keys(moduleMap); // e.g. ["", "greet", "utils/math"]
   const moduleExportKeys = {};
   for (const [route, mod] of Object.entries(moduleMap)) {
-    moduleExportKeys[route] = Object.keys(mod);
+    const keys = Object.keys(mod);
+    if (keys.includes("default")) {
+      const modulePath = route || "(root)";
+      console.warn(`[export-runtime] WARN: default export in "${modulePath}" is ignored. Use named exports instead.`);
+    }
+    moduleExportKeys[route] = keys.filter(k => k !== "default");
   }
 
   const coreModuleCode = minifiedCore || CORE_CODE;
@@ -154,7 +159,13 @@ export const createHandler = (moduleMap, generatedTypes, minifiedCore, coreId, m
       const cpath = isShared ? sharedCorePath : corePath;
 
       const resolved = resolveRoute(pathname);
-      if (!resolved) return new Response("Not found", { status: 404 });
+      if (!resolved) {
+        // Fallback to static assets if ASSETS binding is available
+        if (env?.ASSETS) {
+          return env.ASSETS.fetch(request);
+        }
+        return new Response("Not found", { status: 404 });
+      }
 
       const { route, exportName } = resolved;
 

@@ -45,6 +45,26 @@ export class Counter {
 
 Deploy with `npm run export`. Your `src/` directory is now your API.
 
+## Configuration
+
+All configuration lives in `package.json`:
+
+```json
+{
+  "name": "my-export-app",
+  "exports": "./src",
+  "main": "./public"
+}
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Worker name (used for deployment) |
+| `exports` | Yes | Source entry point (`./src` or `./src/index.ts`) |
+| `main` | No | Static assets directory (e.g., `./public`) |
+
+The `wrangler.toml` is auto-generated at build time -- you don't need to manage it.
+
 ## File-based Routing
 
 Your file structure maps directly to URL paths:
@@ -74,6 +94,34 @@ Each module gets its own type definitions at `?types`:
 ```bash
 curl "https://worker.dev/utils/math?types"
 ```
+
+> **Note:** `export default` is ignored. Use named exports only.
+
+## Static Assets
+
+Serve static files (HTML, CSS, images) alongside your API by setting `main` in `package.json`:
+
+```json
+{
+  "name": "my-app",
+  "exports": "./src",
+  "main": "./public"
+}
+```
+
+```
+my-app/
+├── src/
+│   └── index.ts      → API at /
+├── public/
+│   ├── index.html    → served at /
+│   ├── style.css     → served at /style.css
+│   └── app.js        → served at /app.js
+└── package.json
+```
+
+- **API routes take precedence** -- `/greet` serves the RPC export, not a static file
+- **Powered by [Cloudflare Static Assets](https://developers.cloudflare.com/workers/static-assets/)** -- globally cached, fast delivery
 
 ## Shared Exports
 
@@ -150,7 +198,7 @@ const msg = await greet("World");  // string
 
 ## How It Works
 
-1. `generate-export-types` scans `src/`, builds a module map, generates types with [oxc-parser](https://oxc.rs), and minifies the ~5KB client core with [oxc-minify](https://oxc.rs)
+1. `generate-export-types` reads `package.json`, scans the source directory, builds a module map, generates types with [oxc-parser](https://oxc.rs), minifies the ~5KB client core with [oxc-minify](https://oxc.rs), and generates `wrangler.toml`
 2. When a client imports a URL, a tiny ESM module is returned that imports the cached core
 3. The core opens a WebSocket and creates [Proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy) objects for each export
 4. Function calls are serialized with [devalue](https://github.com/sveltejs/devalue) and sent over WebSocket

@@ -65,6 +65,8 @@ export function createRpcDispatcher(moduleMap) {
   // path = [route, ...exportPath] — route selects the module, exportPath walks its exports
   const splitPath = (path) => {
     const [route, ...rest] = path;
+    // Reject default export access
+    if (rest[0] === "default") throw new Error("Export not found: default");
     return { exports: resolveModule(route), exportPath: rest };
   };
 
