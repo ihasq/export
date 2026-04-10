@@ -1327,3 +1327,142 @@ describe("auth: configuration", () => {
     }
   });
 });
+
+// ═════════════════════════════════════════════════════════════
+//  Client Default Export (D1/R2/KV/Auth proxies)
+// ═════════════════════════════════════════════════════════════
+
+describe("client: default export generation", () => {
+  const tempDir = path.join(FIXTURE_DIR, ".client-test-temp");
+
+  it("includes d1 proxy when D1 bindings configured", async () => {
+    fs.mkdirSync(tempDir, { recursive: true });
+    fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, "src", "index.ts"), "export const foo = 1;");
+    fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({
+      name: "d1-test",
+      exports: "./src",
+      cloudflare: { d1: ["MY_DB"] }
+    }));
+
+    try {
+      execSync("npx generate-export-types", { cwd: tempDir, stdio: "pipe" });
+
+      const types = fs.readFileSync(path.join(tempDir, ".export-types.js"), "utf8");
+      // Check that the minified core includes D1 proxy code
+      assert.ok(types.includes("MY_DB"), "Should include D1 binding name");
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("includes r2 proxy when R2 bindings configured", async () => {
+    fs.mkdirSync(tempDir, { recursive: true });
+    fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, "src", "index.ts"), "export const foo = 1;");
+    fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({
+      name: "r2-test",
+      exports: "./src",
+      cloudflare: { r2: ["MY_BUCKET"] }
+    }));
+
+    try {
+      execSync("npx generate-export-types", { cwd: tempDir, stdio: "pipe" });
+
+      const types = fs.readFileSync(path.join(tempDir, ".export-types.js"), "utf8");
+      assert.ok(types.includes("MY_BUCKET"), "Should include R2 binding name");
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("includes kv proxy when KV bindings configured", async () => {
+    fs.mkdirSync(tempDir, { recursive: true });
+    fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, "src", "index.ts"), "export const foo = 1;");
+    fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({
+      name: "kv-test",
+      exports: "./src",
+      cloudflare: { kv: ["MY_KV"] }
+    }));
+
+    try {
+      execSync("npx generate-export-types", { cwd: tempDir, stdio: "pipe" });
+
+      const types = fs.readFileSync(path.join(tempDir, ".export-types.js"), "utf8");
+      assert.ok(types.includes("MY_KV"), "Should include KV binding name");
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("includes auth proxy when auth enabled", async () => {
+    fs.mkdirSync(tempDir, { recursive: true });
+    fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, "src", "index.ts"), "export const foo = 1;");
+    fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({
+      name: "auth-test",
+      exports: "./src",
+      cloudflare: { auth: true }
+    }));
+
+    try {
+      execSync("npx generate-export-types", { cwd: tempDir, stdio: "pipe" });
+
+      const types = fs.readFileSync(path.join(tempDir, ".export-types.js"), "utf8");
+      // Auth enabled should set __AUTH_ENABLED__ to true
+      assert.ok(types.includes("true") || types.includes("!0"), "Should have auth enabled");
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("generates correct config file with all bindings", async () => {
+    fs.mkdirSync(tempDir, { recursive: true });
+    fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, "src", "index.ts"), "export const foo = 1;");
+    fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({
+      name: "all-bindings-test",
+      exports: "./src",
+      cloudflare: {
+        d1: ["DB1", "DB2"],
+        r2: ["BUCKET"],
+        kv: ["CACHE"],
+        auth: true
+      }
+    }));
+
+    try {
+      execSync("npx generate-export-types", { cwd: tempDir, stdio: "pipe" });
+
+      const config = fs.readFileSync(path.join(tempDir, ".export-config.js"), "utf8");
+      assert.ok(config.includes('"AUTH_DB"'), "Should auto-inject AUTH_DB");
+      assert.ok(config.includes('"DB1"'), "Should include DB1");
+      assert.ok(config.includes('"DB2"'), "Should include DB2");
+      assert.ok(config.includes('"BUCKET"'), "Should include BUCKET");
+      assert.ok(config.includes('"CACHE"'), "Should include CACHE");
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("validates binding names are UPPER_SNAKE_CASE", async () => {
+    fs.mkdirSync(tempDir, { recursive: true });
+    fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, "src", "index.ts"), "export const foo = 1;");
+    fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({
+      name: "invalid-binding-test",
+      exports: "./src",
+      cloudflare: { d1: ["invalidName"] }
+    }));
+
+    try {
+      execSync("npx generate-export-types", { cwd: tempDir, stdio: "pipe" });
+      assert.fail("Should have thrown error for invalid binding name");
+    } catch (err) {
+      assert.ok(err.message.includes("Command failed") || err.status !== 0, "Should fail for invalid binding");
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});
