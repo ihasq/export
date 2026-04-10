@@ -35,12 +35,12 @@ if (!exportsEntry) {
 // Optional: static assets directory
 const assetsDir = pkg.main || null;
 
-// Optional: export configuration (d1, r2, kv, auth)
-const exportConfig = pkg.export || {};
-const d1Bindings = exportConfig.d1 || [];
-const r2Bindings = exportConfig.r2 || [];
-const kvBindings = exportConfig.kv || [];
-const authConfig = exportConfig.auth || null;
+// Optional: Cloudflare bindings configuration (d1, r2, kv, auth)
+const cloudflareConfig = pkg.cloudflare || {};
+const d1Bindings = cloudflareConfig.d1 || [];
+const r2Bindings = cloudflareConfig.r2 || [];
+const kvBindings = cloudflareConfig.kv || [];
+const authConfig = cloudflareConfig.auth || null;
 
 // Auth requires a D1 database for better-auth
 const allD1Bindings = [...d1Bindings];

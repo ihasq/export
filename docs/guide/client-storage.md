@@ -10,7 +10,7 @@ Add bindings to your `package.json`:
 {
   "name": "my-app",
   "exports": "./src",
-  "export": {
+  "cloudflare": {
     "d1": ["MY_DB", "ANALYTICS_DB"],
     "r2": ["UPLOADS"],
     "kv": ["SESSIONS"]

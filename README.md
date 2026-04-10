@@ -54,7 +54,7 @@ All configuration lives in `package.json`:
   "name": "my-export-app",
   "exports": "./src",
   "main": "./public",
-  "export": {
+  "cloudflare": {
     "d1": ["MY_DB"],
     "r2": ["MY_BUCKET"],
     "kv": ["MY_KV"]
@@ -67,7 +67,7 @@ All configuration lives in `package.json`:
 | `name` | Yes | Worker name (used for deployment) |
 | `exports` | Yes | Source entry point (`./src` or `./src/index.ts`) |
 | `main` | No | Static assets directory (e.g., `./public`) |
-| `export` | No | Cloudflare bindings (D1, R2, KV) |
+| `cloudflare` | No | Cloudflare bindings (D1, R2, KV) |
 
 The `wrangler.toml` is auto-generated at build time -- you don't need to manage it.
 
@@ -153,7 +153,7 @@ Configure bindings in `package.json`:
 
 ```json
 {
-  "export": {
+  "cloudflare": {
     "d1": ["MY_DB"],
     "r2": ["MY_BUCKET"],
     "kv": ["MY_KV"]
