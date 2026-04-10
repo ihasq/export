@@ -30,7 +30,12 @@ All configuration lives in `package.json`:
 {
   "name": "my-export-app",
   "exports": "./src",
-  "main": "./public"
+  "main": "./public",
+  "export": {
+    "d1": ["MY_DB"],
+    "r2": ["MY_BUCKET"],
+    "kv": ["MY_KV"]
+  }
 }
 ```
 
@@ -39,6 +44,7 @@ All configuration lives in `package.json`:
 | `name` | Yes | Worker name (used for deployment) |
 | `exports` | Yes | Source entry point (`./src` or `./src/index.ts`) |
 | `main` | No | Static assets directory (e.g., `./public`) |
+| `export` | No | Cloudflare bindings (D1, R2, KV) for client access |
 
 The `wrangler.toml` is auto-generated when you run `npm run dev` or `npm run export` -- you don't need to manage it manually.
 
@@ -94,6 +100,7 @@ This generates type definitions, minifies the client, and deploys to Cloudflare 
 
 - [Path-based imports](/guide/path-imports) -- import individual exports
 - [Static Assets](/guide/static-assets) -- serve HTML, CSS, and other files
+- [Client Storage](/guide/client-storage) -- access D1, R2, KV from the browser
 - [Classes](/guide/classes) -- remote class instantiation
 - [Streaming](/guide/streaming) -- AsyncIterator and ReadableStream
 - [Shared Exports](/guide/shared-exports) -- cross-client shared state

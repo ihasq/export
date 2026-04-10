@@ -34,6 +34,7 @@ The core client library (~5KB) is served with immutable caching and changes path
 - **Zero-config client** -- just `import` from a URL
 - **Path-based imports** -- `import greet from ".../greet"`
 - **Static assets** -- serve HTML, CSS, and images alongside your API
+- **Client storage** -- access D1, R2, KV directly from the browser
 - **Classes** -- remote instantiation with Comlink-style proxies
 - **Streaming** -- ReadableStream and AsyncIterator support
 - **Shared exports** -- cross-client shared state via Durable Objects

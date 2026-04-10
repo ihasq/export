@@ -53,7 +53,12 @@ All configuration lives in `package.json`:
 {
   "name": "my-export-app",
   "exports": "./src",
-  "main": "./public"
+  "main": "./public",
+  "export": {
+    "d1": ["MY_DB"],
+    "r2": ["MY_BUCKET"],
+    "kv": ["MY_KV"]
+  }
 }
 ```
 
@@ -62,6 +67,7 @@ All configuration lives in `package.json`:
 | `name` | Yes | Worker name (used for deployment) |
 | `exports` | Yes | Source entry point (`./src` or `./src/index.ts`) |
 | `main` | No | Static assets directory (e.g., `./public`) |
+| `export` | No | Cloudflare bindings (D1, R2, KV) |
 
 The `wrangler.toml` is auto-generated at build time -- you don't need to manage it.
 
@@ -122,6 +128,40 @@ my-app/
 
 - **API routes take precedence** -- `/greet` serves the RPC export, not a static file
 - **Powered by [Cloudflare Static Assets](https://developers.cloudflare.com/workers/static-assets/)** -- globally cached, fast delivery
+
+## Client Storage (D1, R2, KV)
+
+Access Cloudflare storage directly from the client via the default export:
+
+```javascript
+import client, { greet } from "https://my-worker.workers.dev/";
+
+// D1 Database with tagged template literals
+const users = await client.d1.MY_DB`SELECT * FROM users WHERE active = ${true}`;
+const user = await client.d1.MY_DB`SELECT * FROM users WHERE id = ${id}`.first();
+
+// R2 Object Storage
+const file = await client.r2.MY_BUCKET.get("images/logo.png");
+await client.r2.MY_BUCKET.put("images/logo.png", imageData);
+
+// KV Key-Value Store
+const value = await client.kv.MY_KV.get("session:abc123");
+await client.kv.MY_KV.put("session:abc123", JSON.stringify(session));
+```
+
+Configure bindings in `package.json`:
+
+```json
+{
+  "export": {
+    "d1": ["MY_DB"],
+    "r2": ["MY_BUCKET"],
+    "kv": ["MY_KV"]
+  }
+}
+```
+
+Binding names must be `UPPER_SNAKE_CASE`. The `wrangler.toml` will be auto-generated with the correct bindings.
 
 ## Shared Exports
 

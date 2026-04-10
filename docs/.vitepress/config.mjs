@@ -131,6 +131,7 @@ export default defineConfig({
         items: [
           { text: "Path-based Imports", link: "/guide/path-imports" },
           { text: "Static Assets", link: "/guide/static-assets" },
+          { text: "Client Storage", link: "/guide/client-storage" },
           { text: "Classes", link: "/guide/classes" },
           { text: "Streaming", link: "/guide/streaming" },
           { text: "Shared Exports", link: "/guide/shared-exports" },
