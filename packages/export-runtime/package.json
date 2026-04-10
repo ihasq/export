@@ -23,8 +23,7 @@
     ".": "./entry.js"
   },
   "bin": {
-    "generate-export-types": "./bin/generate-types.mjs",
-    "export-auth": "./bin/auth.mjs"
+    "generate-export-types": "./bin/generate-types.mjs"
   },
   "files": [
     "entry.js",
@@ -33,8 +32,7 @@
     "rpc.js",
     "shared-do.js",
     "auth.js",
-    "bin/generate-types.mjs",
-    "bin/auth.mjs"
+    "bin/generate-types.mjs"
   ],
   "dependencies": {
     "better-auth": "^1.2.0",
