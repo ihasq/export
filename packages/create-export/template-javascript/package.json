@@ -12,7 +12,7 @@
     "auth:list": "node node_modules/export-runtime/bin/auth.mjs list"
   },
   "dependencies": {
-    "export-runtime": "^0.0.13"
+    "export-runtime": "^0.0.14"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

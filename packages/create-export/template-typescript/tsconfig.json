@@ -8,5 +8,5 @@
     "lib": ["ESNext"],
     "types": ["@cloudflare/workers-types"]
   },
-  "include": ["src"]
+  "include": ["src", ".export-client.d.ts", "export.d.ts"]
 }

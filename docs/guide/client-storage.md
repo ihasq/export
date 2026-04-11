@@ -253,6 +253,82 @@ wrangler d1 create my-app-auth-db
 npx better-auth migrate
 ```
 
+## TypeScript Support
+
+Running `npm run dev` generates type definitions for your configured bindings:
+
+- `.export-client.d.ts` - Type definitions for the client object
+- `export.d.ts` - Module declarations (customize for your URLs)
+
+### Setting Up Types
+
+1. Add your worker URL to `export.d.ts`:
+
+```typescript
+// export.d.ts
+declare module "http://localhost:8787" {
+  export * from "./.export-client";
+  export { default } from "./.export-client";
+}
+
+declare module "https://my-worker.workers.dev" {
+  export * from "./.export-client";
+  export { default } from "./.export-client";
+}
+```
+
+2. Include in `tsconfig.json`:
+
+```json
+{
+  "include": ["src", ".export-client.d.ts", "export.d.ts"]
+}
+```
+
+### Typed Queries
+
+D1 queries support generics for type-safe results:
+
+```typescript
+import client from "https://my-worker.workers.dev";
+
+interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
+// Typed query results
+const users = await client.d1.MY_DB<User>`SELECT * FROM users`;
+// users.results is User[]
+
+const user = await client.d1.MY_DB<User>`
+  SELECT * FROM users WHERE id = ${id}
+`.first();
+// user is User | null
+```
+
+### Generated Types
+
+The client types are generated based on your `cloudflare` config:
+
+```typescript
+// Auto-generated in .export-client.d.ts
+interface ExportClient {
+  d1: {
+    MY_DB: ExportD1Proxy;
+    ANALYTICS_DB: ExportD1Proxy;
+  };
+  r2: {
+    UPLOADS: ExportR2Proxy;
+  };
+  kv: {
+    SESSIONS: ExportKVProxy;
+  };
+  auth: ExportAuthProxy | null;
+}
+```
+
 ## Server-Side Access
 
 On the server side, bindings are available via the standard Cloudflare `env` object:
