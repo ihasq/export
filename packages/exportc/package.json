@@ -1,6 +1,6 @@
 {
   "name": "exportc",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "description": "CLI to add export to existing projects",
   "scripts": {
     "test": "node --test test/init.test.mjs",

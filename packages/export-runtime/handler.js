@@ -96,9 +96,8 @@ export const createHandler = (moduleMap, generatedTypes, minifiedCore, coreId, m
     const namedExports = keys
       .map((key) => `export const ${key} = createProxy([${JSON.stringify(route)}, ${JSON.stringify(key)}]);`)
       .join("\n");
-    // Include default export (client) if configured
-    const defaultExport = hasClient ? `\nexport { default } from ".${cpath}";` : "";
-    return `import { createProxy } from ".${cpath}";\n${namedExports}${defaultExport}`;
+    // Always include default export (client) - it will be null if no bindings configured
+    return `import { createProxy } from ".${cpath}";\nexport { default } from ".${cpath}";\n${namedExports}`;
   };
 
   const buildExportModule = (cpath, route, name) =>
