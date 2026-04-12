@@ -8,15 +8,14 @@ Add [export](https://github.com/ihasq/export) to existing Vite projects. One com
 # In your existing Vite project
 npx exportc init
 
-# Install export dependencies
-cd export && npm install && cd ..
-
 # Start development (Wrangler starts automatically!)
 npm run dev
 
 # Deploy to Cloudflare Workers Sites
 npm run export
 ```
+
+That's it. Dependencies are installed automatically.
 
 ## What You Get
 

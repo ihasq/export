@@ -51,7 +51,6 @@ Already have a Vite project? Add export with a single command:
 
 ```bash
 npx exportc init
-cd export && npm install
 ```
 
 Then import your server exports:

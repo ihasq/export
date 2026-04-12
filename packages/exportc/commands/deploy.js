@@ -1,4 +1,3 @@
-import * as p from "@clack/prompts";
 import pc from "picocolors";
 import fs from "node:fs";
 import path from "node:path";
@@ -10,32 +9,28 @@ export async function deploy(argv) {
 
   // Check if export directory exists
   if (!fs.existsSync(exportDir)) {
-    p.cancel(`No export/ directory found. Run ${pc.cyan("exportc init")} first.`);
+    console.error(pc.red("✗") + ` No export/ directory found. Run ${pc.cyan("exportc init")} first.`);
     process.exit(1);
   }
 
   // Check if dependencies are installed
   const nodeModules = path.join(exportDir, "node_modules");
   if (!fs.existsSync(nodeModules)) {
-    p.cancel(`Dependencies not installed. Run ${pc.cyan("cd export && npm install")} first.`);
+    console.error(pc.red("✗") + ` Dependencies not installed. Run ${pc.cyan("cd export && npm install")} first.`);
     process.exit(1);
   }
 
-  p.intro(pc.bgCyan(pc.black(" exportc deploy ")));
+  console.log(pc.cyan("exportc deploy"));
+  console.log();
 
   // Step 1: Build Vite
-  const s1 = p.spinner();
-  s1.start("Building with Vite...");
+  console.log("Building with Vite...");
 
   const viteBuild = spawn("npm", ["run", "build"], {
     cwd,
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: "inherit",
     shell: true,
   });
-
-  let viteBuildOutput = "";
-  viteBuild.stdout.on("data", (data) => { viteBuildOutput += data.toString(); });
-  viteBuild.stderr.on("data", (data) => { viteBuildOutput += data.toString(); });
 
   const viteExitCode = await new Promise((resolve) => {
     viteBuild.on("close", resolve);
@@ -43,16 +38,15 @@ export async function deploy(argv) {
   });
 
   if (viteExitCode !== 0) {
-    s1.stop("Vite build failed");
-    console.error(viteBuildOutput);
+    console.error(pc.red("✗") + " Vite build failed");
     process.exit(1);
   }
 
-  s1.stop("Vite build complete");
+  console.log(pc.green("✓") + " Vite build complete");
+  console.log();
 
   // Step 2: Deploy to Cloudflare Workers
-  const s2 = p.spinner();
-  s2.start("Deploying to Cloudflare Workers...");
+  console.log("Deploying to Cloudflare Workers...");
 
   const wranglerDeploy = spawn("npm", ["run", "deploy"], {
     cwd: exportDir,
@@ -66,29 +60,15 @@ export async function deploy(argv) {
   });
 
   if (wranglerExitCode !== 0) {
-    s2.stop("Deployment failed");
+    console.error(pc.red("✗") + " Deployment failed");
     process.exit(1);
   }
-
-  s2.stop("Deployed successfully!");
 
   // Read worker name from export/package.json
   const exportPkgPath = path.join(exportDir, "package.json");
   const exportPkg = JSON.parse(fs.readFileSync(exportPkgPath, "utf8"));
   const workerName = exportPkg.name;
 
-  p.note(
-    `Your app is now live at:
-${pc.cyan(`https://${workerName}.workers.dev/`)}
-
-${pc.bold("What was deployed:")}
-- Static assets (Vite build output)
-- Server exports (export/ directory)
-
-${pc.bold("Client imports will resolve to:")}
-${pc.cyan(`https://${workerName}.workers.dev/`)}`,
-    "Workers Sites"
-  );
-
-  p.outro("Done!");
+  console.log();
+  console.log(pc.green("✓") + " Deployed to " + pc.cyan(`https://${workerName}.workers.dev/`));
 }

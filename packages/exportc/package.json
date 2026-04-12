@@ -1,9 +1,10 @@
 {
   "name": "exportc",
-  "version": "0.0.4",
+  "version": "0.0.10",
   "description": "CLI to add export to existing projects",
   "scripts": {
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/init.test.mjs",
+    "test:e2e": "node --test test/e2e.test.mjs"
   },
   "keywords": [
     "cloudflare",
@@ -38,12 +39,11 @@
     "commands"
   ],
   "dependencies": {
-    "@clack/prompts": "^0.8.2",
     "mri": "^1.2.0",
     "picocolors": "^1.1.1"
   },
   "peerDependencies": {
-    "vite": "^5.0.0 || ^6.0.0"
+    "vite": "^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0"
   },
   "peerDependenciesMeta": {
     "vite": {

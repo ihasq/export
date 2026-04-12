@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import mri from "mri";
-import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { init } from "./commands/init.js";
 import { dev } from "./commands/dev.js";
@@ -11,36 +10,32 @@ const argv = mri(process.argv.slice(2), {
   alias: {
     h: "help",
     v: "version",
+    y: "yes",
   },
-  boolean: ["help", "version"],
+  boolean: ["help", "version", "yes"],
 });
 
 const command = argv._[0];
 
 const HELP = `
-${pc.bold("exportc")} - Add export to existing projects
+${pc.bold("exportc")} - Add export to existing Vite projects
 
 ${pc.bold("Usage:")}
   exportc <command> [options]
 
 ${pc.bold("Commands:")}
-  init          Initialize export in an existing Vite project
-  dev           Start development server (Vite + Wrangler)
+  init          Initialize export in a Vite project
+  dev           Start Wrangler dev server
   deploy        Deploy to Cloudflare Workers
 
 ${pc.bold("Options:")}
   -h, --help    Show this help message
   -v, --version Show version number
 
-${pc.bold("Examples:")}
+${pc.bold("Example:")}
   ${pc.dim("# Add export to your Vite project")}
   npx exportc init
-
-  ${pc.dim("# Start development")}
-  npx exportc dev
-
-  ${pc.dim("# Deploy to Cloudflare")}
-  npx exportc deploy
+  npm run dev
 `;
 
 if (argv.help || !command) {
@@ -70,6 +65,6 @@ if (!handler) {
 try {
   await handler(argv);
 } catch (err) {
-  p.cancel(err.message);
+  console.error(pc.red("Error:"), err.message);
   process.exit(1);
 }

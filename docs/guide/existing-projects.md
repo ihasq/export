@@ -12,15 +12,14 @@ Use `exportc` to add export to your existing Vite project. One command sets up e
 # In your existing Vite project
 npx exportc init
 
-# Install export dependencies
-cd export && npm install && cd ..
-
 # Start development (Wrangler auto-starts!)
 npm run dev
 
 # Deploy to Workers Sites
 npm run export
 ```
+
+That's it. Dependencies are installed automatically, just like shadcn.
 
 ## How It Works
 
