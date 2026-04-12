@@ -58,15 +58,11 @@ import { defineConfig } from "vite";
 import { exportPlugin } from "exportc/vite";
 
 export default defineConfig({
-  plugins: [
-    exportPlugin({
-      production: "https://my-app-api.workers.dev"
-    }),
-  ],
+  plugins: [exportPlugin()],
 });
 ```
 
-The `production` option is required for production builds -- it specifies the deployed Worker URL.
+The production URL is auto-detected from `cloudflare.name` in package.json (e.g., `my-app-api` becomes `https://my-app-api.workers.dev`).
 
 ### Development (`npm run dev`)
 
@@ -81,7 +77,7 @@ The `production` option is required for production builds -- it specifies the de
 1. Builds your Vite app with `vite build`
 2. Generates types and wrangler.toml from `cloudflare` config
 3. Deploys to Workers Sites (static assets + server exports)
-4. `export/` imports resolve to the configured `production` URL
+4. `export/` imports resolve to `https://{cloudflare.name}.workers.dev`
 
 ## Project Structure
 

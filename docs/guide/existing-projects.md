@@ -175,12 +175,14 @@ export default defineConfig({
       // Development server URL (default: http://localhost:8787)
       dev: "http://localhost:8787",
 
-      // Production Worker URL (required for production builds)
-      production: "https://my-api.workers.dev",
+      // Production URL (auto-detected from cloudflare.name, override if needed)
+      production: "https://custom-domain.workers.dev",
     }),
   ],
 });
 ```
+
+Both options are optional. The production URL is auto-detected from `cloudflare.name` in package.json.
 
 ## Deploy
 
@@ -194,15 +196,9 @@ This command:
 1. Builds your Vite app (`vite build`)
 2. Generates types and wrangler.toml from `cloudflare` config
 3. Deploys static assets + server exports to Workers Sites
-4. Your app is now live at your configured production URL
+4. Your app is now live at `https://{cloudflare.name}.workers.dev`
 
-The production URL must be set in your Vite config:
-
-```typescript
-exportPlugin({
-  production: "https://my-api.workers.dev",
-})
-```
+The production URL is auto-detected from `cloudflare.name` in package.json.
 
 ## Commands
 

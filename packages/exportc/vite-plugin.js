@@ -40,10 +40,19 @@ export function exportPlugin(options = {}) {
   let wranglerReady = false;
   let wranglerReadyPromise = null;
 
-  // Auto-detect production URL from export/package.json
+  // Auto-detect production URL from package.json cloudflare.name
   const detectProductionUrl = (root) => {
     if (prodUrl) return prodUrl;
     try {
+      // First check root package.json for cloudflare.name
+      const rootPkgPath = resolve(root, "package.json");
+      if (existsSync(rootPkgPath)) {
+        const rootPkg = JSON.parse(readFileSync(rootPkgPath, "utf8"));
+        if (rootPkg.cloudflare?.name) {
+          return `https://${rootPkg.cloudflare.name}.workers.dev`;
+        }
+      }
+      // Fallback: check export/package.json for backwards compatibility
       const exportPkgPath = resolve(root, exportDir, "package.json");
       if (existsSync(exportPkgPath)) {
         const exportPkg = JSON.parse(readFileSync(exportPkgPath, "utf8"));
@@ -235,7 +244,7 @@ export function exportPlugin(options = {}) {
       } else if (prodUrl) {
         this.info(`Production mode - using ${prodUrl}`);
       } else {
-        this.warn(`Production URL not configured. Add 'production' option to exportPlugin().`);
+        this.warn(`Production URL not detected. Set 'cloudflare.name' in package.json or add 'production' option to exportPlugin().`);
       }
     },
 
@@ -267,7 +276,7 @@ export function exportPlugin(options = {}) {
       if (!baseUrl) {
         if (!isDev) {
           this.error(
-            `[exportc] Production URL not configured. Add { production: "https://your-worker.workers.dev" } to exportPlugin().`
+            `[exportc] Production URL not detected. Set 'cloudflare.name' in package.json or add { production: "https://..." } to exportPlugin().`
           );
         }
         this.error(`[exportc] Could not resolve base URL for export imports.`);
