@@ -10,40 +10,55 @@ import { fileURLToPath } from "url";
 const cwd = process.cwd();
 
 // --- Read package.json for configuration ---
+// First check local package.json, then parent (for exportc-style projects)
 
-const pkgPath = path.join(cwd, "package.json");
-if (!fs.existsSync(pkgPath)) {
-  console.error("package.json not found in", cwd);
-  process.exit(1);
+const localPkgPath = path.join(cwd, "package.json");
+const parentPkgPath = path.join(cwd, "..", "package.json");
+
+let pkg = null;
+let rootPkg = null;
+let isExportcProject = false;
+
+if (fs.existsSync(localPkgPath)) {
+  pkg = JSON.parse(fs.readFileSync(localPkgPath, "utf8"));
 }
 
-const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+// Check if parent has cloudflare config (exportc-style project)
+if (fs.existsSync(parentPkgPath)) {
+  rootPkg = JSON.parse(fs.readFileSync(parentPkgPath, "utf8"));
+  if (rootPkg.cloudflare) {
+    isExportcProject = true;
+  }
+}
 
-// Required fields
-const workerName = pkg.name;
+// Use root package.json's cloudflare config if available (exportc project)
+const cloudflareConfig = isExportcProject ? (rootPkg.cloudflare || {}) : (pkg?.cloudflare || {});
+const securityConfig = isExportcProject ? (rootPkg.security || {}) : (pkg?.security || {});
+
+// Worker name - from cloudflare.name, or package name
+const workerName = cloudflareConfig.name || pkg?.name;
 if (!workerName) {
-  console.error("package.json must have a 'name' field for the Worker name");
+  console.error("Worker name required: set 'cloudflare.name' in package.json or provide a package 'name'");
   process.exit(1);
 }
 
-const exportsEntry = pkg.exports;
+// Source entry - from cloudflare.exports or package exports
+const exportsEntry = cloudflareConfig.exports || pkg?.exports;
 if (!exportsEntry) {
-  console.error("package.json must have an 'exports' field pointing to the source entry (e.g., './src' or './src/index.ts')");
+  console.error("package.json must have 'cloudflare.exports' or 'exports' field pointing to the source entry (e.g., './src' or './')");
   process.exit(1);
 }
 
-// Optional: static assets directory
-const assetsDir = pkg.main || null;
+// Optional: static assets directory (from cloudflare.assets only, not main)
+const assetsDir = cloudflareConfig.assets || null;
 
-// Optional: Cloudflare bindings configuration (d1, r2, kv, auth)
-const cloudflareConfig = pkg.cloudflare || {};
+// Cloudflare bindings configuration (d1, r2, kv, auth)
 const d1Bindings = cloudflareConfig.d1 || [];
 const r2Bindings = cloudflareConfig.r2 || [];
 const kvBindings = cloudflareConfig.kv || [];
 const authConfig = cloudflareConfig.auth || null;
 
-// Optional: Security configuration
-const securityConfig = pkg.security || {};
+// Security configuration
 const accessConfig = securityConfig.access || {};
 const allowedOrigins = accessConfig.origin || []; // empty = allow all (default Workers behavior)
 
@@ -68,7 +83,9 @@ validateBindings(kvBindings, "KV");
 
 // --- Resolve source directory from exports field ---
 
-const exportsPath = path.resolve(cwd, exportsEntry.replace(/^\.\//, ""));
+// For exportc projects, resolve relative to parent directory
+const baseDir = isExportcProject ? path.join(cwd, "..") : cwd;
+const exportsPath = path.resolve(baseDir, exportsEntry.replace(/^\.\//, ""));
 const srcDir = fs.existsSync(exportsPath) && fs.statSync(exportsPath).isDirectory()
   ? exportsPath
   : path.dirname(exportsPath);
@@ -397,14 +414,17 @@ const wranglerLines = [
   ``,
 ];
 
-// Add static assets configuration if main is specified and directory exists
+// Add static assets configuration if assets is specified and directory exists
 if (assetsDir) {
+  // For exportc projects, assets path is relative to parent directory
   const normalizedAssetsDir = assetsDir.startsWith("./") ? assetsDir : `./${assetsDir}`;
-  const absoluteAssetsDir = path.resolve(cwd, normalizedAssetsDir);
+  const absoluteAssetsDir = path.resolve(baseDir, normalizedAssetsDir);
+  // In wrangler.toml, path should be relative to export/ directory for exportc projects
+  const wranglerAssetsPath = isExportcProject ? `../${normalizedAssetsDir.replace(/^\.\//, "")}` : normalizedAssetsDir;
   if (fs.existsSync(absoluteAssetsDir)) {
     wranglerLines.push(
       `[assets]`,
-      `directory = "${normalizedAssetsDir}"`,
+      `directory = "${wranglerAssetsPath}"`,
       `binding = "ASSETS"`,
       `run_worker_first = true`,
       ``,

@@ -111,20 +111,38 @@ export class Counter {
     viteBuildOutDir = outDirMatch[1];
   }
 
-  // Create export/package.json
+  // Update main package.json with cloudflare configuration
+  pkg.scripts = pkg.scripts || {};
+  if (!pkg.scripts["export:dev"]) {
+    pkg.scripts["export:dev"] = "cd export && generate-export-types && wrangler dev";
+  }
+  if (!pkg.scripts["export:deploy"]) {
+    pkg.scripts["export:deploy"] = "vite build && cd export && generate-export-types && wrangler deploy";
+  }
+
+  pkg.devDependencies = pkg.devDependencies || {};
+  if (!pkg.devDependencies.exportc) {
+    pkg.devDependencies.exportc = "latest";
+  }
+
+  // Add cloudflare field if not present
+  if (!pkg.cloudflare) {
+    pkg.cloudflare = {
+      name: workerName,
+      exports: "./export",
+      assets: `./${viteBuildOutDir}`,
+    };
+  }
+
+  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
+
+  // Create export/package.json (minimal - just for npm install in export dir)
   const exportPkgPath = path.join(exportDir, "package.json");
   const exportPkg = {
-    name: workerName,
     private: true,
     type: "module",
-    exports: "./",
-    main: `../${viteBuildOutDir}`,
-    scripts: {
-      dev: "generate-export-types && wrangler dev",
-      deploy: "generate-export-types && wrangler deploy",
-    },
     dependencies: {
-      "export-runtime": "^0.0.18",
+      "export-runtime": "^0.0.19",
     },
     devDependencies: {
       wrangler: "^4.0.0",
@@ -136,19 +154,6 @@ export class Counter {
   }
 
   fs.writeFileSync(exportPkgPath, JSON.stringify(exportPkg, null, 2) + "\n");
-
-  // Update main package.json
-  pkg.scripts = pkg.scripts || {};
-  if (!pkg.scripts["export"]) {
-    pkg.scripts["export"] = "vite build && cd export && npm run deploy";
-  }
-
-  pkg.devDependencies = pkg.devDependencies || {};
-  if (!pkg.devDependencies.exportc) {
-    pkg.devDependencies.exportc = "latest";
-  }
-
-  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
 
   // Update vite.config
   if (!viteConfigContent.includes("exportc/vite")) {
@@ -189,6 +194,7 @@ export.d.ts
 wrangler.toml
 .wrangler/
 .dev.vars
+node_modules/
 `;
   fs.writeFileSync(exportGitignorePath, gitignoreContent);
 
@@ -270,7 +276,8 @@ declare module "export/" {
 
   // Done
   console.log();
-  console.log(pc.green("Done!") + " Run " + pc.cyan("npm run dev") + " to start.");
+  console.log(pc.green("Done!") + " Run " + pc.cyan("npm run dev") + " to start your Vite app.");
+  console.log("         Run " + pc.cyan("npm run export:dev") + " to start the export worker.");
   console.log();
   console.log(pc.gray("  import { hello } from \"export/\";"));
   console.log(pc.gray("  await hello(\"World\");"));

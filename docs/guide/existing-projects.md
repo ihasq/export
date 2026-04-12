@@ -12,11 +12,14 @@ Use `exportc` to add export to your existing Vite project. One command sets up e
 # In your existing Vite project
 npx exportc init
 
-# Start development (Wrangler auto-starts!)
+# Start Vite development
 npm run dev
 
-# Deploy to Workers Sites
-npm run export
+# Start export worker (in another terminal)
+npm run export:dev
+
+# Build and deploy
+npm run export:deploy
 ```
 
 That's it. Dependencies are installed automatically, just like shadcn.
@@ -65,10 +68,23 @@ my-vite-app/
 ├── src/                    # Your Vite app (unchanged)
 ├── export/                 # Server exports (new)
 │   ├── index.ts           # Your server code
-│   ├── package.json       # Worker configuration
+│   ├── package.json       # Minimal (dependencies only)
 │   └── .gitignore
 ├── export-env.d.ts        # TypeScript declarations (new)
+├── package.json           # Contains cloudflare config
 └── vite.config.ts         # Updated with exportPlugin
+```
+
+Configuration is in the root `package.json`:
+
+```json
+{
+  "cloudflare": {
+    "name": "my-vite-app-api",
+    "exports": "./export",
+    "assets": "./dist"
+  }
+}
 ```
 
 ## Writing Exports
@@ -171,22 +187,23 @@ export default defineConfig({
 
 ## Deploy
 
-Deploy your entire app (Vite frontend + server exports) to Cloudflare Workers Sites:
+Deploy your entire app (Vite frontend + server exports) to Cloudflare Workers:
 
 ```bash
-npm run export
+npm run export:deploy
 ```
 
 This command:
 1. Builds your Vite app (`vite build`)
-2. Deploys static assets + server exports to Workers Sites
-3. Your app is now live at `https://{worker-name}.workers.dev`
+2. Generates types and wrangler.toml from `cloudflare` config
+3. Deploys static assets + server exports to Workers
+4. Your app is now live at your configured production URL
 
-The production URL is auto-detected from `export/package.json` name field. Override it in your Vite config if needed:
+The production URL must be set in your Vite config:
 
 ```typescript
 exportPlugin({
-  production: "https://custom-domain.workers.dev",
+  production: "https://my-api.workers.dev",
 })
 ```
 
@@ -194,21 +211,23 @@ exportPlugin({
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start Vite + Wrangler together |
-| `npm run export` | Build Vite app and deploy to Workers Sites |
+| `npm run dev` | Start Vite development server |
+| `npm run export:dev` | Start export worker dev server |
+| `npm run export:deploy` | Build Vite app and deploy to Workers |
 | `exportc init` | Initialize export in your project |
 | `exportc dev` | Start Wrangler dev server standalone |
 | `exportc deploy` | Deploy exports only (without Vite build) |
 
 ## Cloudflare Bindings
 
-Add D1, R2, or KV bindings in `export/package.json`:
+Add D1, R2, or KV bindings in the root `package.json`:
 
 ```json
 {
-  "name": "my-api",
-  "exports": "./",
   "cloudflare": {
+    "name": "my-api",
+    "exports": "./export",
+    "assets": "./dist",
     "d1": ["MY_DB"],
     "r2": ["MY_BUCKET"],
     "kv": ["MY_KV"]

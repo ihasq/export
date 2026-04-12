@@ -8,11 +8,14 @@ Add [export](https://github.com/ihasq/export) to existing Vite projects. One com
 # In your existing Vite project
 npx exportc init
 
-# Start development (Wrangler starts automatically!)
+# Start Vite development
 npm run dev
 
-# Deploy to Cloudflare Workers Sites
-npm run export
+# Start export worker (in another terminal)
+npm run export:dev
+
+# Build and deploy to Cloudflare Workers
+npm run export:deploy
 ```
 
 That's it. Dependencies are installed automatically.
@@ -42,8 +45,9 @@ await counter.increment();  // 1
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start Vite + Wrangler together, auto-generate types |
-| `npm run export` | Build Vite app and deploy to Workers Sites |
+| `npm run dev` | Start Vite development server |
+| `npm run export:dev` | Start export worker dev server |
+| `npm run export:deploy` | Build Vite app and deploy to Workers |
 | `exportc init` | Initialize export in your project |
 | `exportc dev` | Start Wrangler dev server standalone |
 | `exportc deploy` | Deploy exports only |
@@ -59,12 +63,14 @@ import { exportPlugin } from "exportc/vite";
 
 export default defineConfig({
   plugins: [
-    exportPlugin(),
-    // Production URL is auto-detected from export/package.json name
-    // Override with: exportPlugin({ production: "https://custom.workers.dev" })
+    exportPlugin({
+      production: "https://my-app-api.workers.dev"
+    }),
   ],
 });
 ```
+
+The `production` option is required for production builds -- it specifies the deployed Worker URL.
 
 ### Development (`npm run dev`)
 
@@ -74,12 +80,12 @@ export default defineConfig({
 4. Watches for changes and regenerates types automatically
 5. Transforms `export/` imports to `http://localhost:8787`
 
-### Production (`npm run export`)
+### Production (`npm run export:deploy`)
 
-1. Builds your Vite app
-2. Deploys to Workers Sites (static assets + server exports)
-3. `export/` imports resolve to `https://{worker-name}.workers.dev`
-4. Everything runs on Cloudflare's edge network
+1. Builds your Vite app with `vite build`
+2. Generates types and wrangler.toml from `cloudflare` config
+3. Deploys to Workers (static assets + server exports)
+4. `export/` imports resolve to the configured `production` URL
 
 ## Project Structure
 
@@ -90,10 +96,23 @@ my-vite-app/
 ├── src/                    # Your Vite app (unchanged)
 ├── export/                 # Server exports (Cloudflare Worker)
 │   ├── index.ts           # Your server code
-│   ├── package.json       # Worker configuration
+│   ├── package.json       # Minimal (dependencies only)
 │   └── .gitignore         # Generated files excluded
 ├── export-env.d.ts        # TypeScript declarations (auto-generated)
+├── package.json           # Contains cloudflare config
 └── vite.config.ts         # Updated with exportPlugin
+```
+
+Configuration is in the root `package.json`:
+
+```json
+{
+  "cloudflare": {
+    "name": "my-vite-app-api",
+    "exports": "./export",
+    "assets": "./dist"
+  }
+}
 ```
 
 ## TypeScript Support

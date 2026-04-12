@@ -4,13 +4,13 @@ Access Cloudflare D1 databases, R2 object storage, and KV namespaces directly fr
 
 ## Configuration
 
-Add bindings to your `package.json`:
+Add bindings to your `package.json` under the `cloudflare` field:
 
 ```json
 {
-  "name": "my-app",
-  "exports": "./src",
   "cloudflare": {
+    "name": "my-app",
+    "exports": "./src",
     "d1": ["MY_DB", "ANALYTICS_DB"],
     "r2": ["UPLOADS"],
     "kv": ["SESSIONS"]
@@ -18,7 +18,7 @@ Add bindings to your `package.json`:
 }
 ```
 
-Binding names must be `UPPER_SNAKE_CASE`. When you run `npm run dev` or `npm run export`, the appropriate `wrangler.toml` sections are generated automatically.
+Binding names must be `UPPER_SNAKE_CASE`. When you run `npm run dev` or `npm run deploy`, the appropriate `wrangler.toml` sections are generated automatically.
 
 ## Importing the Client
 

@@ -3,16 +3,19 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": "./src",
+  "cloudflare": {
+    "name": "my-export-app",
+    "exports": "./src"
+  },
   "scripts": {
     "dev": "generate-export-types && wrangler dev",
-    "export": "generate-export-types && wrangler deploy",
+    "deploy": "generate-export-types && wrangler deploy",
     "auth:add": "node node_modules/export-runtime/bin/auth.mjs add",
     "auth:remove": "node node_modules/export-runtime/bin/auth.mjs remove",
     "auth:list": "node node_modules/export-runtime/bin/auth.mjs list"
   },
   "dependencies": {
-    "export-runtime": "^0.0.14"
+    "export-runtime": "^0.0.19"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241127.0",

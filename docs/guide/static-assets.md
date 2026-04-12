@@ -8,13 +8,15 @@ Serve static files (HTML, CSS, JavaScript, images) alongside your API exports.
 
 ## Setup
 
-Set the `main` field in `package.json` to your static assets directory:
+Set `cloudflare.assets` in `package.json` to your static assets directory:
 
 ```json
 {
-  "name": "my-app",
-  "exports": "./src",
-  "main": "./public"
+  "cloudflare": {
+    "name": "my-app",
+    "exports": "./src",
+    "assets": "./public"
+  }
 }
 ```
 
@@ -47,9 +49,11 @@ This means your API exports always take precedence over static files with the sa
 
 ```json
 {
-  "name": "my-fullstack-app",
-  "exports": "./src",
-  "main": "./public"
+  "cloudflare": {
+    "name": "my-fullstack-app",
+    "exports": "./src",
+    "assets": "./public"
+  }
 }
 ```
 
@@ -96,12 +100,14 @@ Under the hood, this uses [Cloudflare Workers Static Assets](https://developers.
 
 ## Without static assets
 
-If you don't need static files, simply omit the `main` field:
+If you don't need static files, simply omit the `assets` field:
 
 ```json
 {
-  "name": "my-api",
-  "exports": "./src"
+  "cloudflare": {
+    "name": "my-api",
+    "exports": "./src"
+  }
 }
 ```
 

@@ -24,14 +24,15 @@ my-app/
 
 ## Configuration
 
-All configuration lives in `package.json`:
+All configuration lives in `package.json` under the `cloudflare` field:
 
 ```json
 {
   "name": "my-export-app",
-  "exports": "./src",
-  "main": "./public",
   "cloudflare": {
+    "name": "my-export-app",
+    "exports": "./src",
+    "assets": "./public",
     "d1": ["MY_DB"],
     "r2": ["MY_BUCKET"],
     "kv": ["MY_KV"]
@@ -46,13 +47,15 @@ All configuration lives in `package.json`:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `name` | Yes | Worker name (used for deployment) |
-| `exports` | Yes | Source entry point (`./src` or `./src/index.ts`) |
-| `main` | No | Static assets directory (e.g., `./public`) |
-| `cloudflare` | No | Cloudflare bindings (D1, R2, KV) for client access |
+| `cloudflare.name` | Yes | Worker name (used for deployment) |
+| `cloudflare.exports` | Yes | Source entry point (`./src` or `./src/index.ts`) |
+| `cloudflare.assets` | No | Static assets directory (e.g., `./public`) |
+| `cloudflare.d1` | No | D1 database bindings |
+| `cloudflare.r2` | No | R2 bucket bindings |
+| `cloudflare.kv` | No | KV namespace bindings |
 | `security` | No | Security settings ([see Security guide](/guide/security)) |
 
-The `wrangler.toml` is auto-generated when you run `npm run dev` or `npm run export` -- you don't need to manage it manually.
+The `wrangler.toml` is auto-generated when you run `npm run dev` or `npm run deploy` -- you don't need to manage it manually.
 
 ## Write your exports
 

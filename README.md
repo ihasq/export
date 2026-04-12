@@ -74,14 +74,15 @@ Deploy everything with `npm run export` -- builds your Vite app and deploys to W
 
 ## Configuration
 
-All configuration lives in `package.json`:
+All configuration lives in `package.json` under the `cloudflare` field:
 
 ```json
 {
   "name": "my-export-app",
-  "exports": "./src",
-  "main": "./public",
   "cloudflare": {
+    "name": "my-export-app",
+    "exports": "./src",
+    "assets": "./public",
     "d1": ["MY_DB"],
     "r2": ["MY_BUCKET"],
     "kv": ["MY_KV"]
@@ -96,10 +97,13 @@ All configuration lives in `package.json`:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `name` | Yes | Worker name (used for deployment) |
-| `exports` | Yes | Source entry point (`./src` or `./src/index.ts`) |
-| `main` | No | Static assets directory (e.g., `./public`) |
-| `cloudflare` | No | Cloudflare bindings (D1, R2, KV) |
+| `cloudflare.name` | Yes | Worker name (used for deployment) |
+| `cloudflare.exports` | Yes | Source entry point (`./src` or `./src/index.ts`) |
+| `cloudflare.assets` | No | Static assets directory (e.g., `./public`, `./dist`) |
+| `cloudflare.d1` | No | D1 database bindings |
+| `cloudflare.r2` | No | R2 bucket bindings |
+| `cloudflare.kv` | No | KV namespace bindings |
+| `cloudflare.auth` | No | Enable better-auth integration |
 | `security` | No | Security settings (origin restrictions, etc.) |
 
 The `wrangler.toml` is auto-generated at build time -- you don't need to manage it.
@@ -138,13 +142,15 @@ curl "https://worker.dev/utils/math?types"
 
 ## Static Assets
 
-Serve static files (HTML, CSS, images) alongside your API by setting `main` in `package.json`:
+Serve static files (HTML, CSS, images) alongside your API by setting `cloudflare.assets` in `package.json`:
 
 ```json
 {
-  "name": "my-app",
-  "exports": "./src",
-  "main": "./public"
+  "cloudflare": {
+    "name": "my-app",
+    "exports": "./src",
+    "assets": "./public"
+  }
 }
 ```
 
