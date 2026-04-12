@@ -86,11 +86,11 @@ function discoverModules(dir, base = "") {
   const modules = [];
   if (!fs.existsSync(dir)) return modules;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name.startsWith("_") || entry.name.startsWith(".")) continue;
+    if (entry.name.startsWith("_") || entry.name.startsWith(".") || entry.name === "node_modules") continue;
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       modules.push(...discoverModules(fullPath, base ? `${base}/${entry.name}` : entry.name));
-    } else if (EXTENSIONS.includes(path.extname(entry.name))) {
+    } else if (EXTENSIONS.includes(path.extname(entry.name)) && !entry.name.endsWith(".d.ts")) {
       const nameWithoutExt = entry.name.replace(/\.(ts|tsx|js|jsx)$/, "");
       const routePath = nameWithoutExt === "index"
         ? base  // index.ts → directory path ("" for root)
@@ -396,16 +396,21 @@ const wranglerLines = [
   ``,
 ];
 
-// Add static assets configuration if main is specified
+// Add static assets configuration if main is specified and directory exists
 if (assetsDir) {
   const normalizedAssetsDir = assetsDir.startsWith("./") ? assetsDir : `./${assetsDir}`;
-  wranglerLines.push(
-    `[assets]`,
-    `directory = "${normalizedAssetsDir}"`,
-    `binding = "ASSETS"`,
-    `run_worker_first = true`,
-    ``,
-  );
+  const absoluteAssetsDir = path.resolve(cwd, normalizedAssetsDir);
+  if (fs.existsSync(absoluteAssetsDir)) {
+    wranglerLines.push(
+      `[assets]`,
+      `directory = "${normalizedAssetsDir}"`,
+      `binding = "ASSETS"`,
+      `run_worker_first = true`,
+      ``,
+    );
+  } else {
+    console.log(`Note: Assets directory "${normalizedAssetsDir}" not found. Run "vite build" first to enable static assets.`);
+  }
 }
 
 // Add Durable Objects for shared state
