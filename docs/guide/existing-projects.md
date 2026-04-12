@@ -182,7 +182,7 @@ export default defineConfig({
 });
 ```
 
-Both options are optional. The production URL is auto-detected from `cloudflare.name` in package.json.
+Both options are optional. The production URL is auto-detected after first deploy (subdomain is saved to package.json).
 
 ## Deploy
 
@@ -196,9 +196,9 @@ This command:
 1. Builds your Vite app (`vite build`)
 2. Generates types and wrangler.toml from `cloudflare` config
 3. Deploys static assets + server exports to Workers Sites
-4. Your app is now live at `https://{cloudflare.name}.workers.dev`
+4. Your app is now live at your Workers URL
 
-The production URL is auto-detected from `cloudflare.name` in package.json.
+The production URL is auto-detected on first deploy. The subdomain is saved to `cloudflare.subdomain` in package.json.
 
 ## Commands
 

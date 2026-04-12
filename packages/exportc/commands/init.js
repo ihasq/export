@@ -114,9 +114,9 @@ export class Counter {
   // Update main package.json with cloudflare configuration
   pkg.scripts = pkg.scripts || {};
   // npm run dev - Vite plugin auto-starts wrangler
-  // npm run export - Build and deploy to Workers Sites
+  // npm run export - Build and deploy to Workers Sites (auto-detects subdomain on first run)
   if (!pkg.scripts["export"]) {
-    pkg.scripts["export"] = "vite build && cd export && generate-export-types && wrangler deploy";
+    pkg.scripts["export"] = "exportc deploy";
   }
 
   pkg.devDependencies = pkg.devDependencies || {};
