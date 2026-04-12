@@ -320,10 +320,22 @@ export const createHandler = (moduleMap, generatedTypes, minifiedCore, coreId, m
   };
 
   const wireWebSocket = (server, dispatcher, env, onClose) => {
-    // Track session state for this WebSocket connection
+    // Track session state and connection state for this WebSocket connection
     const wsSession = { token: null };
+    let isClosed = false;
+
+    // Safe send that ignores errors when connection is closed
+    const safeSend = (data) => {
+      if (isClosed) return;
+      try {
+        server.send(data);
+      } catch {
+        // Connection already closed, ignore
+      }
+    };
 
     server.addEventListener("message", async (event) => {
+      if (isClosed) return;
       let id;
       try {
         const msg = parse(event.data);
@@ -333,7 +345,7 @@ export const createHandler = (moduleMap, generatedTypes, minifiedCore, coreId, m
         if (msg.type === "auth" && msg.token && !msg.method) {
           // Direct token send on reconnect - just update session
           wsSession.token = msg.token;
-          server.send(stringify({ type: "auth-result", id, success: true }));
+          safeSend(stringify({ type: "auth-result", id, success: true }));
           return;
         }
 
@@ -344,12 +356,20 @@ export const createHandler = (moduleMap, generatedTypes, minifiedCore, coreId, m
           wsSession.token = result.value.token;
         }
 
-        if (result) server.send(stringify({ ...result, id }));
+        if (result) safeSend(stringify({ ...result, id }));
       } catch (err) {
-        if (id !== undefined) server.send(stringify({ type: "error", id, error: String(err) }));
+        if (id !== undefined) safeSend(stringify({ type: "error", id, error: String(err) }));
       }
     });
-    if (onClose) server.addEventListener("close", onClose);
+
+    server.addEventListener("close", () => {
+      isClosed = true;
+      if (onClose) onClose();
+    });
+
+    server.addEventListener("error", () => {
+      isClosed = true;
+    });
   };
 
   return {

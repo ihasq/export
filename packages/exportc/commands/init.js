@@ -124,7 +124,7 @@ export class Counter {
       deploy: "generate-export-types && wrangler deploy",
     },
     dependencies: {
-      "export-runtime": "^0.0.17",
+      "export-runtime": "^0.0.18",
     },
     devDependencies: {
       wrangler: "^4.0.0",
