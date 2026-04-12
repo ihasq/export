@@ -35,6 +35,11 @@ All configuration lives in `package.json`:
     "d1": ["MY_DB"],
     "r2": ["MY_BUCKET"],
     "kv": ["MY_KV"]
+  },
+  "security": {
+    "access": {
+      "origin": ["https://example.com"]
+    }
   }
 }
 ```
@@ -45,6 +50,7 @@ All configuration lives in `package.json`:
 | `exports` | Yes | Source entry point (`./src` or `./src/index.ts`) |
 | `main` | No | Static assets directory (e.g., `./public`) |
 | `cloudflare` | No | Cloudflare bindings (D1, R2, KV) for client access |
+| `security` | No | Security settings ([see Security guide](/guide/security)) |
 
 The `wrangler.toml` is auto-generated when you run `npm run dev` or `npm run export` -- you don't need to manage it manually.
 
@@ -104,3 +110,4 @@ This generates type definitions, minifies the client, and deploys to Cloudflare 
 - [Classes](/guide/classes) -- remote class instantiation
 - [Streaming](/guide/streaming) -- AsyncIterator and ReadableStream
 - [Shared Exports](/guide/shared-exports) -- cross-client shared state
+- [Security](/guide/security) -- origin restrictions and access control

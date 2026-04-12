@@ -1,0 +1,261 @@
+/**
+ * Vite plugin for export integration
+ *
+ * Allows importing server exports using the "export:/" prefix:
+ *   import { hello } from "export:/";
+ *   import { utils } from "export:/utils";
+ *
+ * In development:
+ *   - Automatically starts Wrangler dev server
+ *   - Proxies to local Wrangler (localhost:8787)
+ *
+ * In production:
+ *   - Resolves to the deployed Worker URL
+ */
+
+import { spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+const EXPORT_PREFIX = "export:";
+const DEFAULT_DEV_PORT = 8787;
+
+/**
+ * @param {Object} options
+ * @param {string} [options.dev] - Development server URL (default: http://localhost:8787)
+ * @param {string} [options.production] - Production Worker URL (auto-detected from export/package.json name if not specified)
+ * @param {string} [options.exportDir] - Export directory (default: ./export)
+ * @param {boolean} [options.autoStart] - Auto-start Wrangler in dev mode (default: true)
+ * @returns {import('vite').Plugin}
+ */
+export function exportPlugin(options = {}) {
+  const devPort = options.port || DEFAULT_DEV_PORT;
+  const devUrl = options.dev || `http://localhost:${devPort}`;
+  let prodUrl = options.production;
+  const exportDir = options.exportDir || "./export";
+  const autoStart = options.autoStart !== false;
+
+  let isDev = true;
+  let wranglerProcess = null;
+  let wranglerReady = false;
+  let wranglerReadyPromise = null;
+
+  // Auto-detect production URL from export/package.json
+  const detectProductionUrl = (root) => {
+    if (prodUrl) return prodUrl;
+    try {
+      const exportPkgPath = resolve(root, exportDir, "package.json");
+      if (existsSync(exportPkgPath)) {
+        const exportPkg = JSON.parse(readFileSync(exportPkgPath, "utf8"));
+        if (exportPkg.name) {
+          return `https://${exportPkg.name}.workers.dev`;
+        }
+      }
+    } catch {}
+    return null;
+  };
+
+  const startWrangler = (root) => {
+    const exportPath = resolve(root, exportDir);
+
+    if (!existsSync(exportPath)) {
+      console.warn(`[exportc] Export directory not found: ${exportPath}`);
+      console.warn(`[exportc] Run 'npx exportc init' to initialize.`);
+      return Promise.resolve();
+    }
+
+    const nodeModulesPath = resolve(exportPath, "node_modules");
+    if (!existsSync(nodeModulesPath)) {
+      console.warn(`[exportc] Dependencies not installed in ${exportPath}`);
+      console.warn(`[exportc] Run 'cd ${exportDir} && npm install' first.`);
+      return Promise.resolve();
+    }
+
+    return new Promise((resolveReady) => {
+      console.log(`[exportc] Starting Wrangler dev server...`);
+
+      // Generate types first, then start wrangler
+      const generateTypes = spawn("npm", ["run", "dev"], {
+        cwd: exportPath,
+        stdio: ["ignore", "pipe", "pipe"],
+        shell: true,
+      });
+
+      wranglerProcess = generateTypes;
+
+      generateTypes.stdout.on("data", (data) => {
+        const output = data.toString();
+        process.stdout.write(`[export] ${output}`);
+
+        // Detect when wrangler is ready
+        if (output.includes("Ready on") || output.includes("Listening on") || output.includes("localhost")) {
+          if (!wranglerReady) {
+            wranglerReady = true;
+            console.log(`[exportc] Wrangler ready at ${devUrl}`);
+            resolveReady();
+          }
+        }
+      });
+
+      generateTypes.stderr.on("data", (data) => {
+        const output = data.toString();
+        // Filter out noisy warnings
+        if (!output.includes("ExperimentalWarning")) {
+          process.stderr.write(`[export] ${output}`);
+        }
+        // Also check stderr for ready message
+        if (output.includes("Ready on") || output.includes("Listening on") || output.includes("localhost:8787")) {
+          if (!wranglerReady) {
+            wranglerReady = true;
+            console.log(`[exportc] Wrangler ready at ${devUrl}`);
+            resolveReady();
+          }
+        }
+      });
+
+      generateTypes.on("error", (err) => {
+        console.error(`[exportc] Failed to start Wrangler:`, err.message);
+        resolveReady();
+      });
+
+      generateTypes.on("close", (code) => {
+        if (code !== 0 && code !== null) {
+          console.error(`[exportc] Wrangler exited with code ${code}`);
+        }
+        wranglerProcess = null;
+        resolveReady();
+      });
+
+      // Timeout after 30 seconds
+      setTimeout(() => {
+        if (!wranglerReady) {
+          console.warn(`[exportc] Wrangler startup timeout, continuing anyway...`);
+          wranglerReady = true;
+          resolveReady();
+        }
+      }, 30000);
+    });
+  };
+
+  const stopWrangler = () => {
+    if (wranglerProcess) {
+      console.log(`[exportc] Stopping Wrangler...`);
+      wranglerProcess.kill("SIGTERM");
+      wranglerProcess = null;
+      wranglerReady = false;
+    }
+  };
+
+  return {
+    name: "vite-plugin-export",
+
+    config(config, { command }) {
+      isDev = command === "serve";
+      // Auto-detect production URL if not specified
+      if (!isDev && !prodUrl) {
+        const root = config.root || process.cwd();
+        prodUrl = detectProductionUrl(root);
+      }
+      return {};
+    },
+
+    configureServer(server) {
+      if (isDev && autoStart) {
+        const root = server.config.root || process.cwd();
+        wranglerReadyPromise = startWrangler(root);
+
+        // Cleanup on server close
+        server.httpServer?.on("close", stopWrangler);
+      }
+    },
+
+    async buildStart() {
+      if (isDev) {
+        if (autoStart && wranglerReadyPromise) {
+          await wranglerReadyPromise;
+        }
+        this.info(`Development mode - using ${devUrl}`);
+      } else if (prodUrl) {
+        this.info(`Production mode - using ${prodUrl}`);
+      } else {
+        this.warn(`Production URL not configured. Add 'production' option to exportPlugin().`);
+      }
+    },
+
+    buildEnd() {
+      if (!isDev) {
+        stopWrangler();
+      }
+    },
+
+    closeBundle() {
+      stopWrangler();
+    },
+
+    resolveId(source) {
+      if (source.startsWith(EXPORT_PREFIX)) {
+        return { id: source, external: false };
+      }
+      return null;
+    },
+
+    load(id) {
+      if (!id.startsWith(EXPORT_PREFIX)) {
+        return null;
+      }
+
+      const exportPath = id.slice(EXPORT_PREFIX.length) || "/";
+      const baseUrl = isDev ? devUrl : prodUrl;
+
+      if (!baseUrl) {
+        if (!isDev) {
+          this.error(
+            `[exportc] Production URL not configured. Add { production: "https://your-worker.workers.dev" } to exportPlugin().`
+          );
+        }
+        this.error(`[exportc] Could not resolve base URL for export imports.`);
+      }
+
+      const fullUrl = new URL(exportPath, baseUrl).href;
+
+      const code = `
+// Auto-generated by exportc/vite
+// Importing from: ${fullUrl}
+export * from "${fullUrl}";
+export { default } from "${fullUrl}";
+`;
+
+      return code;
+    },
+
+    transform(code, id) {
+      if (id.includes("node_modules") || !/\.(js|ts|jsx|tsx|vue|svelte)$/.test(id)) {
+        return null;
+      }
+
+      if (code.includes('import("export:') || code.includes("import('export:")) {
+        const baseUrl = isDev ? devUrl : prodUrl;
+        if (!baseUrl && !isDev) {
+          this.warn(`[exportc] Production URL not configured for dynamic imports in ${id}`);
+          return null;
+        }
+
+        const transformed = code.replace(
+          /import\((['"])export:([^'"]*)\1\)/g,
+          (match, quote, path) => {
+            const fullUrl = new URL(path || "/", baseUrl).href;
+            return `import(${quote}${fullUrl}${quote})`;
+          }
+        );
+
+        if (transformed !== code) {
+          return { code: transformed, map: null };
+        }
+      }
+
+      return null;
+    },
+  };
+}
+
+export default exportPlugin;

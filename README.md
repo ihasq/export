@@ -45,6 +45,23 @@ export class Counter {
 
 Deploy with `npm run export`. Your `src/` directory is now your API.
 
+### Add to Existing Project
+
+Already have a Vite project? Add export with a single command:
+
+```bash
+npx exportc init
+cd export && npm install
+```
+
+Then import your server exports:
+
+```typescript
+// In your Vite app
+import { greet } from "export:/";
+const message = await greet("World");
+```
+
 ## Configuration
 
 All configuration lives in `package.json`:
@@ -58,6 +75,11 @@ All configuration lives in `package.json`:
     "d1": ["MY_DB"],
     "r2": ["MY_BUCKET"],
     "kv": ["MY_KV"]
+  },
+  "security": {
+    "access": {
+      "origin": ["https://example.com"]
+    }
   }
 }
 ```
@@ -68,6 +90,7 @@ All configuration lives in `package.json`:
 | `exports` | Yes | Source entry point (`./src` or `./src/index.ts`) |
 | `main` | No | Static assets directory (e.g., `./public`) |
 | `cloudflare` | No | Cloudflare bindings (D1, R2, KV) |
+| `security` | No | Security settings (origin restrictions, etc.) |
 
 The `wrangler.toml` is auto-generated at build time -- you don't need to manage it.
 
@@ -193,6 +216,31 @@ const user = await client.auth.getUser();
 await client.auth.signOut();
 ```
 
+## Security
+
+### Origin Restrictions
+
+By default, your Worker accepts requests from any origin (standard Cloudflare Workers behavior). To restrict access to specific origins:
+
+```json
+{
+  "security": {
+    "access": {
+      "origin": ["https://example.com", "https://app.example.com"]
+    }
+  }
+}
+```
+
+When `origin` is set:
+- Only listed origins can access your Worker (HTTP and WebSocket)
+- Requests from unlisted origins receive `403 Forbidden`
+- CORS headers reflect the allowed origin instead of `*`
+
+When `origin` is empty or omitted:
+- All origins are allowed (default)
+- CORS header is `Access-Control-Allow-Origin: *`
+
 ## Shared Exports
 
 Multiple clients can share the same state via [Durable Objects](https://developers.cloudflare.com/durable-objects/). Add `?shared` to the import URL:
@@ -285,6 +333,7 @@ npm run export
 | Package | Description |
 |---------|-------------|
 | [`create-export`](https://www.npmjs.com/package/create-export) | `npm create export` -- scaffold a new project |
+| [`exportc`](https://www.npmjs.com/package/exportc) | `npx exportc init` -- add export to existing Vite projects |
 | [`export-runtime`](https://www.npmjs.com/package/export-runtime) | The runtime that powers everything |
 
 ## Documentation

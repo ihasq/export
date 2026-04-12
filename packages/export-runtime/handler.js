@@ -5,14 +5,14 @@ import { handleAuthRoute, getSessionFromRequest, verifySession } from "./auth.js
 
 const JS = "application/javascript; charset=utf-8";
 const TS = "application/typescript; charset=utf-8";
-const CORS = { "Access-Control-Allow-Origin": "*" };
 const IMMUTABLE = "public, max-age=31536000, immutable";
 
-const jsResponse = (body, extra = {}) =>
-  new Response(body, { headers: { "Content-Type": JS, ...CORS, ...extra } });
-
-const tsResponse = (body, status = 200) =>
-  new Response(body, { status, headers: { "Content-Type": TS, ...CORS, "Cache-Control": "no-cache" } });
+const createResponseHelpers = (corsHeaders) => ({
+  jsResponse: (body, extra = {}) =>
+    new Response(body, { headers: { "Content-Type": JS, ...corsHeaders, ...extra } }),
+  tsResponse: (body, status = 200) =>
+    new Response(body, { status, headers: { "Content-Type": TS, ...corsHeaders, "Cache-Control": "no-cache" } }),
+});
 
 export const createHandler = (moduleMap, generatedTypes, minifiedCore, coreId, minifiedSharedCore, exportConfig = {}) => {
   // moduleMap: { routePath: moduleNamespace, ... }
@@ -28,7 +28,33 @@ export const createHandler = (moduleMap, generatedTypes, minifiedCore, coreId, m
   }
 
   // Export configuration
-  const { d1Bindings = [], r2Bindings = [], kvBindings = [], authConfig = null } = exportConfig;
+  const { d1Bindings = [], r2Bindings = [], kvBindings = [], authConfig = null, securityConfig = {} } = exportConfig;
+
+  // Security: allowed origins (empty array = allow all)
+  const allowedOrigins = securityConfig?.access?.origin || [];
+  const hasOriginRestriction = allowedOrigins.length > 0;
+
+  // Check if origin is allowed
+  const isOriginAllowed = (origin) => {
+    if (!hasOriginRestriction) return true;
+    if (!origin) return false;
+    return allowedOrigins.includes(origin);
+  };
+
+  // Get CORS headers for a request
+  const getCorsHeaders = (request) => {
+    const origin = request.headers.get("Origin");
+    if (!hasOriginRestriction) {
+      return { "Access-Control-Allow-Origin": "*" };
+    }
+    if (origin && isOriginAllowed(origin)) {
+      return {
+        "Access-Control-Allow-Origin": origin,
+        "Vary": "Origin",
+      };
+    }
+    return {};
+  };
   const hasClient = d1Bindings.length > 0 || r2Bindings.length > 0 || kvBindings.length > 0 || authConfig;
 
   // Generate core code with config
@@ -331,9 +357,24 @@ export const createHandler = (moduleMap, generatedTypes, minifiedCore, coreId, m
     async fetch(request, env) {
       const url = new URL(request.url);
       const isShared = url.searchParams.has("shared");
+      const origin = request.headers.get("Origin");
+
+      // --- Origin check ---
+      if (hasOriginRestriction && origin && !isOriginAllowed(origin)) {
+        return new Response("Forbidden: Origin not allowed", { status: 403 });
+      }
+
+      // Get CORS headers for this request
+      const corsHeaders = getCorsHeaders(request);
+      const { jsResponse, tsResponse } = createResponseHelpers(corsHeaders);
 
       // --- WebSocket upgrade ---
       if (request.headers.get("Upgrade") === "websocket") {
+        // Origin check for WebSocket (browsers send Origin header)
+        if (hasOriginRestriction && origin && !isOriginAllowed(origin)) {
+          return new Response("Forbidden: Origin not allowed", { status: 403 });
+        }
+
         const pair = new WebSocketPair();
         const [client, server] = Object.values(pair);
         server.accept();
@@ -393,7 +434,7 @@ export const createHandler = (moduleMap, generatedTypes, minifiedCore, coreId, m
         if (env?.ASSETS) {
           return env.ASSETS.fetch(request);
         }
-        return new Response("Not found", { status: 404 });
+        return new Response("Not found", { status: 404, headers: corsHeaders });
       }
 
       const { route, exportName } = resolved;

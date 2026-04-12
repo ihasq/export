@@ -42,6 +42,11 @@ const r2Bindings = cloudflareConfig.r2 || [];
 const kvBindings = cloudflareConfig.kv || [];
 const authConfig = cloudflareConfig.auth || null;
 
+// Optional: Security configuration
+const securityConfig = pkg.security || {};
+const accessConfig = securityConfig.access || {};
+const allowedOrigins = accessConfig.origin || []; // empty = allow all (default Workers behavior)
+
 // Auth requires a D1 database for better-auth
 const allD1Bindings = [...d1Bindings];
 if (authConfig && !allD1Bindings.includes("AUTH_DB")) {
@@ -465,6 +470,7 @@ export const d1Bindings = ${JSON.stringify(allD1Bindings)};
 export const r2Bindings = ${JSON.stringify(r2Bindings)};
 export const kvBindings = ${JSON.stringify(kvBindings)};
 export const authConfig = ${JSON.stringify(authConfig)};
+export const securityConfig = ${JSON.stringify({ access: { origin: allowedOrigins } })};
 `;
 fs.writeFileSync(configPath, configContent);
 

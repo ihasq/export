@@ -124,6 +124,7 @@ export default defineConfig({
         items: [
           { text: "What is export?", link: "/guide/" },
           { text: "Getting Started", link: "/guide/getting-started" },
+          { text: "Add to Existing Projects", link: "/guide/existing-projects" },
         ],
       },
       {
@@ -136,6 +137,7 @@ export default defineConfig({
           { text: "Streaming", link: "/guide/streaming" },
           { text: "Shared Exports", link: "/guide/shared-exports" },
           { text: "TypeScript & Deno", link: "/guide/typescript" },
+          { text: "Security", link: "/guide/security" },
         ],
       },
       {

@@ -1,0 +1,53 @@
+{
+  "name": "exportc",
+  "version": "0.0.3",
+  "description": "CLI to add export to existing projects",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "vite",
+    "esm",
+    "rpc"
+  ],
+  "homepage": "https://github.com/ihasq/export#readme",
+  "bugs": {
+    "url": "https://github.com/ihasq/export/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ihasq/export.git",
+    "directory": "packages/exportc"
+  },
+  "license": "MIT",
+  "author": "ihasq",
+  "type": "module",
+  "bin": {
+    "exportc": "./index.js"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./vite": "./vite-plugin.js"
+  },
+  "files": [
+    "index.js",
+    "vite-plugin.js",
+    "vite-plugin.d.ts",
+    "commands"
+  ],
+  "dependencies": {
+    "@clack/prompts": "^0.8.2",
+    "mri": "^1.2.0",
+    "picocolors": "^1.1.1"
+  },
+  "peerDependencies": {
+    "vite": "^5.0.0 || ^6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
+  }
+}
