@@ -19,6 +19,26 @@ await greet("World");  // "Hello, World!"
 
 No SDK. No code generation. No client-side build step.
 
+## Two Ways to Use
+
+### New Project
+
+```bash
+npm create export my-app
+cd my-app && npm install
+npm run dev
+```
+
+### Existing Vite Project
+
+```bash
+npx exportc init
+cd export && npm install && cd ..
+npm run dev
+```
+
+The Vite plugin auto-starts Wrangler, auto-generates TypeScript types, and deploys to Workers Sites with `npm run export`.
+
 ## How it works
 
 1. Your Worker exports functions and classes in `src/index.ts`
@@ -32,6 +52,7 @@ The core client library (~5KB) is served with immutable caching and changes path
 ## Key features
 
 - **Zero-config client** -- just `import` from a URL
+- **Vite integration** -- `npm run dev` starts everything, types auto-generated
 - **Path-based imports** -- `import greet from ".../greet"`
 - **Static assets** -- serve HTML, CSS, and images alongside your API
 - **Client storage** -- access D1, R2, KV directly from the browser

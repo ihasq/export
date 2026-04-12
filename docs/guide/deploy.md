@@ -1,10 +1,12 @@
 ---
-description: "Deploy your export project to Cloudflare Workers with a single command. Supports headless servers and CI environments."
+description: "Deploy your export project to Cloudflare Workers with a single command. Supports standalone Workers and Workers Sites for full-stack apps."
 ---
 
 # Deploy
 
-## To Cloudflare Workers
+## Standalone Worker
+
+For projects created with `npm create export`:
 
 ```bash
 npm run export
@@ -14,6 +16,23 @@ This runs two steps:
 
 1. **`generate-export-types`** -- reads `package.json`, parses your source with oxc-parser, generates type definitions, minifies the client, produces a unique cache-busting UUID, and auto-generates `wrangler.toml`
 2. **`wrangler deploy`** -- deploys your Worker to Cloudflare
+
+## Workers Sites (Vite + export)
+
+For Vite projects with `exportc`:
+
+```bash
+npm run export
+```
+
+This deploys your entire app to Workers Sites:
+
+1. **`vite build`** -- builds your frontend app
+2. **`wrangler deploy`** -- deploys static assets + server exports together
+
+Your Vite app's `dist/` folder becomes the static assets, and your `export/` functions are the Worker. Everything runs on Cloudflare's edge.
+
+The production URL is auto-detected from `export/package.json` name. Your app is live at `https://{name}.workers.dev`.
 
 ## Generated files
 

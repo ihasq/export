@@ -1,10 +1,10 @@
 ---
-description: "Add export to an existing Vite project with exportc CLI."
+description: "Add export to an existing Vite project with exportc CLI. Auto-starts Wrangler, auto-generates TypeScript types, and deploys to Workers Sites."
 ---
 
 # Add to Existing Projects
 
-Use `exportc` to add export to your existing Vite project.
+Use `exportc` to add export to your existing Vite project. One command sets up everything.
 
 ## Quick Start
 
@@ -17,7 +17,19 @@ cd export && npm install && cd ..
 
 # Start development (Wrangler auto-starts!)
 npm run dev
+
+# Deploy to Workers Sites
+npm run export
 ```
+
+## How It Works
+
+The `exportPlugin` for Vite handles everything automatically:
+
+1. **Auto-starts Wrangler** -- no separate terminal needed
+2. **Auto-generates TypeScript types** -- full autocompletion from your actual code
+3. **Transforms `export/` imports** -- resolves to local dev server or production URL
+4. **Hot reloads types** -- regenerates `export-env.d.ts` when your exports change
 
 ## Development
 
@@ -30,12 +42,14 @@ npm run dev
 The export plugin automatically:
 1. Starts Wrangler dev server in the background
 2. Waits for it to be ready
-3. Transforms `export:/` imports to point to the local server
+3. Generates `export-env.d.ts` from your export code
+4. Transforms `export/` imports to `http://localhost:8787`
+5. Watches for changes and regenerates types
 
-Then import your server exports:
+Import your server exports:
 
 ```typescript
-import { hello, Counter } from "export:/";
+import { hello, Counter } from "export/";
 
 const message = await hello("World");  // "Hello, World!"
 
@@ -98,26 +112,26 @@ export class Session {
 
 ## Import Syntax
 
-Use the `export:/` prefix to import your server exports:
+Use the `export/` prefix to import your server exports:
 
 ```typescript
 // Root exports
-import { fetchUser, Session } from "export:/";
+import { fetchUser, Session } from "export/";
 
 // Subpath exports (if you have export/utils/index.ts)
-import { formatDate } from "export:/utils";
+import { formatDate } from "export/utils";
 
 // Single export
-import fetchUser from "export:/fetchUser";
+import fetchUser from "export/fetchUser";
 ```
 
 ## TypeScript Support
 
-Update `export-env.d.ts` when you add new exports:
+TypeScript declarations are **automatically generated** when you run `npm run dev`. The Vite plugin watches for changes to your export files and regenerates `export-env.d.ts` automatically.
 
 ```typescript
-// export-env.d.ts
-declare module "export:/" {
+// export-env.d.ts (auto-generated - do not edit manually)
+declare module "export/" {
   export function fetchUser(id: string): Promise<User>;
   export function saveData(data: object): Promise<void>;
   export class Session {
@@ -128,10 +142,12 @@ declare module "export:/" {
   }
 }
 
-declare module "export:/utils" {
+declare module "export/utils" {
   export function formatDate(date: Date): Promise<string>;
 }
 ```
+
+Types are inferred from your actual export code, providing accurate autocompletion and type checking with zero manual maintenance.
 
 ## Vite Plugin Options
 
@@ -156,17 +172,22 @@ export default defineConfig({
 
 ## Deploy
 
-Deploy your exports to Cloudflare Workers:
+Deploy your entire app (Vite frontend + server exports) to Cloudflare Workers Sites:
 
 ```bash
-npm run export:deploy
+npm run export
 ```
 
-Then update your Vite config with the production URL:
+This command:
+1. Builds your Vite app (`vite build`)
+2. Deploys static assets + server exports to Workers Sites
+3. Your app is now live at `https://{worker-name}.workers.dev`
+
+The production URL is auto-detected from `export/package.json` name field. Override it in your Vite config if needed:
 
 ```typescript
 exportPlugin({
-  production: "https://my-api.workers.dev",
+  production: "https://custom-domain.workers.dev",
 })
 ```
 
@@ -174,11 +195,11 @@ exportPlugin({
 
 | Command | Description |
 |---------|-------------|
+| `npm run dev` | Start Vite + Wrangler together |
+| `npm run export` | Build Vite app and deploy to Workers Sites |
 | `exportc init` | Initialize export in your project |
-| `exportc dev` | Start Wrangler dev server |
-| `exportc deploy` | Deploy to Cloudflare Workers |
-| `npm run export:dev` | Alias for `exportc dev` |
-| `npm run export:deploy` | Alias for `exportc deploy` |
+| `exportc dev` | Start Wrangler dev server standalone |
+| `exportc deploy` | Deploy exports only (without Vite build) |
 
 ## Cloudflare Bindings
 
@@ -199,7 +220,7 @@ Add D1, R2, or KV bindings in `export/package.json`:
 Then import the client in your Vite app:
 
 ```typescript
-import client from "export:/";
+import client from "export/";
 
 const users = await client.d1.MY_DB`SELECT * FROM users`;
 ```

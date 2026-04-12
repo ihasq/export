@@ -45,7 +45,7 @@ export async function dev(argv) {
     `Wrangler dev server is running at ${pc.cyan("http://localhost:8787")}
 
 ${pc.bold("In your Vite app:")}
-${pc.cyan(`import { hello } from "export:/";`)}
+${pc.cyan(`import { hello } from "export/";`)}
 ${pc.cyan(`const message = await hello("World");`)}
 
 ${pc.dim("Press Ctrl+C to stop")}`,

@@ -37,11 +37,11 @@ export interface ExportPluginOptions {
  * Vite plugin for export integration
  *
  * Automatically starts Wrangler when you run `npm run dev` and allows
- * importing server exports using the "export:/" prefix:
+ * importing server exports using the "export/" prefix:
  *
  * ```ts
- * import { hello } from "export:/";
- * import { utils } from "export:/utils";
+ * import { hello } from "export/";
+ * import { utils } from "export/utils";
  * ```
  *
  * @example

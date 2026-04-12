@@ -20,14 +20,14 @@ hero:
 features:
   - title: Just import
     details: Import directly from a Worker URL. Functions, classes, and objects become async proxies automatically.
+  - title: Vite integration
+    details: "npx exportc init adds export to any Vite project. Auto-starts Wrangler, auto-generates types, deploys with npm run export."
   - title: Shared state
     details: Add ?shared to share state across clients via Durable Objects. Real-time collaboration with zero setup.
   - title: Streaming
     details: ReadableStream and AsyncIterator work out of the box. Stream data to the client as it's produced.
   - title: Types included
-    details: TypeScript definitions are generated at build time with oxc-parser. Full inference in Deno via X-TypeScript-Types.
-  - title: Path-based imports
-    details: "Import individual exports by path: /greet, /Counter. The ~5KB core is immutably cached."
+    details: TypeScript definitions auto-generated from your code. Full inference in Deno via X-TypeScript-Types, auto-updated in Vite.
   - title: Rich data types
     details: Date, Map, Set, BigInt, URL, RegExp, TypedArrays, circular references -- all serialize and deserialize seamlessly.
 ---

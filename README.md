@@ -58,9 +58,20 @@ Then import your server exports:
 
 ```typescript
 // In your Vite app
-import { greet } from "export:/";
-const message = await greet("World");
+import { greet, Counter } from "export/";
+
+const message = await greet("World");  // "Hello, World!"
+
+const counter = await new Counter(0);
+await counter.increment();  // 1
 ```
+
+The Vite plugin:
+- **Auto-starts Wrangler** when you run `npm run dev`
+- **Auto-generates TypeScript types** from your export code
+- **Transforms imports** to the local dev server or production URL
+
+Deploy everything with `npm run export` -- builds your Vite app and deploys to Workers Sites.
 
 ## Configuration
 

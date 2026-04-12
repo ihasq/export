@@ -1,6 +1,6 @@
 # exportc
 
-Add [export](https://github.com/ihasq/export) to existing Vite projects.
+Add [export](https://github.com/ihasq/export) to existing Vite projects. One command sets up server-side functions with full TypeScript support.
 
 ## Quick Start
 
@@ -18,13 +18,20 @@ npm run dev
 npm run export
 ```
 
+## What You Get
+
+- **Single command dev** -- `npm run dev` starts both Vite and Wrangler
+- **Auto-generated types** -- TypeScript definitions from your actual code
+- **Workers Sites deploy** -- Static assets + server exports in one deployment
+- **Zero config** -- Production URL auto-detected from package name
+
 ## Usage
 
-After initialization, import your server exports using the `export:/` prefix:
+After initialization, import your server exports using the `export/` prefix:
 
 ```typescript
 // In your Vite app
-import { hello, Counter } from "export:/";
+import { hello, Counter } from "export/";
 
 const message = await hello("World");  // "Hello, World!"
 
@@ -34,24 +41,17 @@ await counter.increment();  // 1
 
 ## Commands
 
-### `exportc init`
-
-Initialize export in your Vite project:
-- Creates `export/` directory with example server code
-- Updates `vite.config.ts` with the export plugin
-- Adds npm scripts for development and deployment
-
-### `exportc dev`
-
-Start the Wrangler development server for your exports.
-
-### `exportc deploy`
-
-Deploy your exports to Cloudflare Workers.
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start Vite + Wrangler together, auto-generate types |
+| `npm run export` | Build Vite app and deploy to Workers Sites |
+| `exportc init` | Initialize export in your project |
+| `exportc dev` | Start Wrangler dev server standalone |
+| `exportc deploy` | Deploy exports only |
 
 ## Vite Plugin
 
-The `exportPlugin` automatically starts Wrangler and transforms `export:/` imports:
+The `exportPlugin` handles everything automatically:
 
 ```typescript
 // vite.config.ts
@@ -67,15 +67,20 @@ export default defineConfig({
 });
 ```
 
-**Development** (`npm run dev`):
-1. Automatically starts Wrangler dev server
-2. Waits for it to be ready
-3. Transforms `export:/` imports to `http://localhost:8787`
+### Development (`npm run dev`)
 
-**Production** (`npm run export`):
-1. Builds Vite app
+1. Automatically starts Wrangler dev server in the background
+2. Waits for it to be ready before serving your app
+3. Generates `export-env.d.ts` with TypeScript declarations
+4. Watches for changes and regenerates types automatically
+5. Transforms `export/` imports to `http://localhost:8787`
+
+### Production (`npm run export`)
+
+1. Builds your Vite app
 2. Deploys to Workers Sites (static assets + server exports)
-3. `export:/` imports resolve to `https://{worker-name}.workers.dev`
+3. `export/` imports resolve to `https://{worker-name}.workers.dev`
+4. Everything runs on Cloudflare's edge network
 
 ## Project Structure
 
@@ -83,29 +88,36 @@ After running `exportc init`:
 
 ```
 my-vite-app/
-├── src/                    # Your Vite app
+├── src/                    # Your Vite app (unchanged)
 ├── export/                 # Server exports (Cloudflare Worker)
 │   ├── index.ts           # Your server code
-│   └── package.json       # Worker configuration
-├── export-env.d.ts        # TypeScript declarations
+│   ├── package.json       # Worker configuration
+│   └── .gitignore         # Generated files excluded
+├── export-env.d.ts        # TypeScript declarations (auto-generated)
 └── vite.config.ts         # Updated with exportPlugin
 ```
 
 ## TypeScript Support
 
-The `export-env.d.ts` file provides type declarations for `export:/` imports. Update it when you add new exports:
+The `export-env.d.ts` file is **automatically generated** when you run `npm run dev`. The Vite plugin watches for changes to your export files and regenerates type declarations automatically.
 
 ```typescript
-// export-env.d.ts
-declare module "export:/" {
+// export-env.d.ts (auto-generated)
+declare module "export/" {
   export function hello(name: string): Promise<string>;
-  export function myNewFunction(): Promise<void>;
+  export class Counter {
+    constructor(initial?: number);
+    increment(): Promise<number>;
+    [Symbol.dispose](): Promise<void>;
+  }
 }
 
-declare module "export:/utils" {
+declare module "export/utils" {
   export function formatDate(date: Date): Promise<string>;
 }
 ```
+
+Types are inferred from your actual export code, so you get accurate type information with zero manual maintenance.
 
 ## License
 
